@@ -237,11 +237,14 @@ def compress_audio():
             return jsonify({"error": "Mandá el video como multipart/form-data (campo 'file') o JSON con video_url"}), 400
 
         # ── Extraer audio comprimido (mono 64kbps → ~0.5MB/min) ──
-   res = run_cmd(["ffmpeg", "-y", "-i", clip_path,
-               "-vf", "transpose=1,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
-               "-c:a", "aac", "-b:a", "192k",
-               "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-               vertical_path], job_id)
+        res = run_cmd([
+            "ffmpeg", "-y", "-i", raw_path,
+            "-vn",           # sin video
+            "-ac", "1",      # mono
+            "-ar", "16000",  # 16kHz suficiente para STT
+            "-b:a", "64k",
+            audio_path
+        ], job_id)
 
         try: os.remove(raw_path)
         except: pass
@@ -366,9 +369,36 @@ def process_reel():
         except: pass
 
         # ── 3. Verticalizar 9:16 ──
-        print(f"[{job_id}] Verticalizando a 1080x1920...")
+        # Detectar rotación del video (iPhones graban con metadata de rotación)
+        probe = subprocess.run(
+            ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", clip_path],
+            capture_output=True, text=True
+        )
+        rotation = 0
+        try:
+            probe_data = json.loads(probe.stdout)
+            for stream in probe_data.get("streams", []):
+                tags = stream.get("tags", {}) or stream.get("side_data_list", [{}])[0] if stream.get("side_data_list") else {}
+                rot = stream.get("tags", {}).get("rotate", "0")
+                rotation = int(rot)
+                break
+        except:
+            pass
+
+        print(f"[{job_id}] Verticalizando a 1080x1920 (rotación detectada: {rotation}°)...")
+
+        # Construir filtro según rotación
+        if rotation == 90:
+            vf_rotate = "transpose=1,"
+        elif rotation == 270 or rotation == -90:
+            vf_rotate = "transpose=2,"
+        elif rotation == 180:
+            vf_rotate = "transpose=1,transpose=1,"
+        else:
+            vf_rotate = ""
+
         res = run_cmd(["ffmpeg", "-y", "-i", clip_path,
-                       "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
+                       "-vf", f"{vf_rotate}scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
                        "-c:a", "aac", "-b:a", "192k",
                        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
                        vertical_path], job_id)
@@ -544,75 +574,7 @@ def download_video(job_id):
     return send_file(path, mimetype="video/mp4", as_attachment=True,
                      download_name=f"reel_{safe}.mp4")
 
-@app.route("/search-brolls", methods=["POST"])
-def search_brolls():
-    if not check_auth(request):
-        return jsonify({"error": "Unauthorized"}), 401
 
-    data     = request.json or {}
-    keywords = data.get("keywords", [])
-    count    = int(data.get("count", 3))
-
-    if not keywords:
-        return jsonify({"urls": []})
-
-    pexels_key = os.environ.get("PEXELS_API_KEY", "")
-    if not pexels_key:
-        return jsonify({"error": "Falta PEXELS_API_KEY"}), 500
-
-    try:
-        query = keywords[0]
-        r = requests.get(
-            "https://api.pexels.com/videos/search",
-            headers={"Authorization": pexels_key},
-            params={"query": query, "per_page": count, "orientation": "portrait"},
-            timeout=30
-        )
-        r.raise_for_status()
-        videos = r.json().get("videos", [])
-        urls = [
-            (v.get("video_files") or [{}])[0].get("link", "")
-            for v in videos
-            if v.get("video_files")
-        ]
-        return jsonify({"success": True, "urls": [u for u in urls if u]})
-    except Exception as e:
-        return jsonify({"error": str(e), "urls": []}), 500
-
-@app.route("/upload-video", methods=["POST"])
-def upload_video():
-    if not check_auth(request):
-        return jsonify({"error": "Unauthorized"}), 401
-
-    job_id = str(uuid.uuid4())[:8]
-
-    if "file" not in request.files:
-        return jsonify({"error": "Falta archivo"}), 400
-
-    f = request.files["file"]
-    ext = os.path.splitext(f.filename)[1] if f.filename else ".mp4"
-    path = f"{WORK_DIR}/{job_id}_upload{ext}"
-    f.save(path)
-    size_mb = round(os.path.getsize(path) / 1024 / 1024, 1)
-    print(f"[{job_id}] Video subido: {size_mb}MB → {path}")
-
-    return jsonify({
-        "success": True,
-        "job_id": job_id,
-        "video_url": f"http://localhost:{os.environ.get('PORT', 8080)}/serve-video/{job_id}",
-        "internal_path": path
-    })
-
-
-@app.route("/serve-video/<job_id>", methods=["GET"])
-def serve_video(job_id):
-    safe = secure_filename(job_id)
-    for ext in [".mp4", ".mov", ".MOV", ".MP4"]:
-        path = f"{WORK_DIR}/{safe}_upload{ext}"
-        if os.path.exists(path):
-            return send_file(path, mimetype="video/mp4")
-    return jsonify({"error": "No encontrado"}), 404
-        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
