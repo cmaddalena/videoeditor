@@ -199,41 +199,53 @@ def health():
 @app.route("/compress-audio", methods=["POST"])
 def compress_audio():
     """
-    Recibe URL de video grande → extrae audio MP3 comprimido (<10MB).
-    n8n llama esto ANTES de mandar a Whisper.
+    Acepta video de dos formas:
+    1. Archivo binario directo (multipart/form-data con campo 'file') ← desde n8n
+    2. JSON con video_url (para tests manuales)
 
-    Body: { "video_url": "https://..." }
-    Returns: { "audio_url": "/download-audio/<job_id>" }
+    Returns: audio MP3 comprimido listo para Whisper (~2MB)
     """
     if not check_auth(request):
         return jsonify({"error": "Unauthorized"}), 401
 
     job_id = str(uuid.uuid4())[:8]
-    data   = request.json or {}
-
-    video_url = data.get("video_url")
-    if not video_url:
-        return jsonify({"error": "Falta video_url"}), 400
 
     try:
-        raw_path   = f"{WORK_DIR}/{job_id}_raw.mp4"
+        raw_path   = f"{WORK_DIR}/{job_id}_raw"
         audio_path = f"{OUTPUT_DIR}/{job_id}_audio.mp3"
 
-        # Descargar video
-        if not download_file(video_url, raw_path, job_id):
-            return jsonify({"error": "No pude descargar el video"}), 400
+        # ── Modo 1: archivo binario desde n8n (multipart/form-data) ──
+        if request.files and "file" in request.files:
+            f = request.files["file"]
+            ext = os.path.splitext(f.filename)[1] if f.filename else ".mp4"
+            raw_path += ext
+            print(f"[{job_id}] Recibiendo archivo binario: {f.filename} ({ext})")
+            f.save(raw_path)
+            size_mb = os.path.getsize(raw_path) / 1024 / 1024
+            print(f"[{job_id}] Guardado: {size_mb:.1f}MB → {raw_path}")
 
-        # Extraer audio comprimido (mono, 64kbps → ~0.5MB/min)
+        # ── Modo 2: JSON con video_url (para tests) ──
+        elif request.is_json:
+            data = request.get_json()
+            video_url = data.get("video_url")
+            if not video_url:
+                return jsonify({"error": "Falta video_url o archivo"}), 400
+            raw_path += ".mp4"
+            if not download_file(video_url, raw_path, job_id):
+                return jsonify({"error": "No pude descargar el video"}), 400
+        else:
+            return jsonify({"error": "Mandá el video como multipart/form-data (campo 'file') o JSON con video_url"}), 400
+
+        # ── Extraer audio comprimido (mono 64kbps → ~0.5MB/min) ──
         res = run_cmd([
             "ffmpeg", "-y", "-i", raw_path,
-            "-vn",                      # sin video
-            "-ac", "1",                 # mono
-            "-ar", "16000",             # 16kHz suficiente para STT
+            "-vn",           # sin video
+            "-ac", "1",      # mono
+            "-ar", "16000",  # 16kHz suficiente para STT
             "-b:a", "64k",
             audio_path
         ], job_id)
 
-        # Limpiar video original
         try: os.remove(raw_path)
         except: pass
 
@@ -241,7 +253,7 @@ def compress_audio():
             return jsonify({"error": "Error extrayendo audio", "detail": res["error"]}), 500
 
         size_mb = os.path.getsize(audio_path) / 1024 / 1024
-        print(f"[{job_id}] Audio extraído: {size_mb:.2f}MB")
+        print(f"[{job_id}] ✅ Audio extraído: {size_mb:.2f}MB")
 
         return jsonify({
             "success":   True,
