@@ -237,14 +237,11 @@ def compress_audio():
             return jsonify({"error": "Mandá el video como multipart/form-data (campo 'file') o JSON con video_url"}), 400
 
         # ── Extraer audio comprimido (mono 64kbps → ~0.5MB/min) ──
-        res = run_cmd([
-            "ffmpeg", "-y", "-i", raw_path,
-            "-vn",           # sin video
-            "-ac", "1",      # mono
-            "-ar", "16000",  # 16kHz suficiente para STT
-            "-b:a", "64k",
-            audio_path
-        ], job_id)
+   res = run_cmd(["ffmpeg", "-y", "-i", clip_path,
+               "-vf", "transpose=1,scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
+               "-c:a", "aac", "-b:a", "192k",
+               "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+               vertical_path], job_id)
 
         try: os.remove(raw_path)
         except: pass
