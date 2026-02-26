@@ -575,9 +575,6 @@ def download_video(job_id):
                      download_name=f"reel_{safe}.mp4")
 
 
-if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port, debug=False)
 
 @app.route("/upload-video", methods=["POST"])
 def upload_video():
@@ -591,7 +588,7 @@ def upload_video():
     path = f"{WORK_DIR}/{job_id}_upload{ext}"
     f.save(path)
     size_mb = round(os.path.getsize(path) / 1024 / 1024, 1)
-    print(f"[{job_id}] Video subido: {size_mb}MB -> {path}")
+    print(f"[{job_id}] Video subido: {size_mb}MB")
     return jsonify({"success": True, "job_id": job_id, "size_mb": size_mb})
 
 
@@ -603,3 +600,8 @@ def serve_video(job_id):
         if os.path.exists(path):
             return send_file(path, mimetype="video/mp4")
     return jsonify({"error": "No encontrado"}), 404
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port, debug=False)
