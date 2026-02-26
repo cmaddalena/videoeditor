@@ -578,3 +578,28 @@ def download_video(job_id):
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
+
+@app.route("/upload-video", methods=["POST"])
+def upload_video():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    job_id = str(uuid.uuid4())[:8]
+    if "file" not in request.files:
+        return jsonify({"error": "Falta archivo"}), 400
+    f = request.files["file"]
+    ext = os.path.splitext(f.filename)[1] if f.filename else ".mp4"
+    path = f"{WORK_DIR}/{job_id}_upload{ext}"
+    f.save(path)
+    size_mb = round(os.path.getsize(path) / 1024 / 1024, 1)
+    print(f"[{job_id}] Video subido: {size_mb}MB -> {path}")
+    return jsonify({"success": True, "job_id": job_id, "size_mb": size_mb})
+
+
+@app.route("/serve-video/<job_id>", methods=["GET"])
+def serve_video(job_id):
+    safe = secure_filename(job_id)
+    for ext in [".mp4", ".mov", ".MOV", ".MP4"]:
+        path = f"{WORK_DIR}/{safe}_upload{ext}"
+        if os.path.exists(path):
+            return send_file(path, mimetype="video/mp4")
+    return jsonify({"error": "No encontrado"}), 404
