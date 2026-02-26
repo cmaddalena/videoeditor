@@ -547,7 +547,41 @@ def download_video(job_id):
     return send_file(path, mimetype="video/mp4", as_attachment=True,
                      download_name=f"reel_{safe}.mp4")
 
+@app.route("/search-brolls", methods=["POST"])
+def search_brolls():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
 
+    data     = request.json or {}
+    keywords = data.get("keywords", [])
+    count    = int(data.get("count", 3))
+
+    if not keywords:
+        return jsonify({"urls": []})
+
+    pexels_key = os.environ.get("PEXELS_API_KEY", "")
+    if not pexels_key:
+        return jsonify({"error": "Falta PEXELS_API_KEY"}), 500
+
+    try:
+        query = keywords[0]
+        r = requests.get(
+            "https://api.pexels.com/videos/search",
+            headers={"Authorization": pexels_key},
+            params={"query": query, "per_page": count, "orientation": "portrait"},
+            timeout=30
+        )
+        r.raise_for_status()
+        videos = r.json().get("videos", [])
+        urls = [
+            (v.get("video_files") or [{}])[0].get("link", "")
+            for v in videos
+            if v.get("video_files")
+        ]
+        return jsonify({"success": True, "urls": [u for u in urls if u]})
+    except Exception as e:
+        return jsonify({"error": str(e), "urls": []}), 500
+        
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port, debug=False)
