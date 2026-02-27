@@ -37,8 +37,11 @@ def run_cmd(cmd: list, job_id: str) -> dict:
     print(f"[{job_id}] CMD: {' '.join(str(c) for c in cmd)}")
     result = subprocess.run(cmd, capture_output=True, text=True)
     if result.returncode != 0:
-        print(f"[{job_id}] ERROR:\n{result.stderr[-800:]}")
-        return {"success": False, "error": result.stderr[-500:]}
+        # Capturar inicio del stderr donde está el error real, no el progress
+        stderr_lines = [l for l in result.stderr.split('\n') if l.strip() and 'frame=' not in l and 'fps=' not in l]
+        error_clean = '\n'.join(stderr_lines[-20:])
+        print(f"[{job_id}] ERROR:\n{error_clean}")
+        return {"success": False, "error": error_clean[-800:]}
     return {"success": True}
 
 
@@ -332,7 +335,7 @@ def _do_process_reel(job_id: str, cfg: dict):
         res = run_cmd(["ffmpeg", "-y", "-i", clip_path,
                        "-vf", f"{vf_rotate}scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
                        "-c:a", "aac", "-b:a", "192k",
-                       "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                       "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                        vertical_path], job_id)
         if not res["success"]:
             raise Exception("Error verticalizando")
@@ -377,7 +380,7 @@ def _do_process_reel(job_id: str, cfg: dict):
             if vignette: filters.append("vignette=PI/5")
             res = run_cmd(["ffmpeg", "-y", "-i", current,
                            "-vf", ",".join(filters),
-                           "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                           "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                            graded_path], job_id)
             if res["success"]:
                 current = graded_path
@@ -451,7 +454,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                     res_b = run_cmd(["ffmpeg", "-y", "-i", bp_raw,
                         "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
                         "-t", str(actual_dur),
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                         "-an", bp_v], job_id)
                     try: os.remove(bp_raw)
                     except: pass
@@ -469,7 +472,7 @@ def _do_process_reel(job_id: str, cfg: dict):
         res = run_cmd([
             "ffmpeg", "-y", "-i", current,
             "-vf", f"ass={sub_file}{drawtext_filter}",
-            "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
             subbed_path
         ], job_id)
         if not res["success"]:
@@ -494,7 +497,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                 ["ffmpeg", "-y"] + inputs_b + [
                     "-filter_complex", ";".join(fc_parts),
                     "-map", last_v, "-map", "0:a",
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                     "-c:a", "copy", broll_out
                 ], job_id)
             if res_b["success"]:
@@ -515,7 +518,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                 "-filter_complex",
                 f"[1:v]scale={logo_size}:-1[logo];[0:v][logo]overlay={logo_pos}[vout]",
                 "-map", "[vout]", "-map", "0:a",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                 "-c:a", "copy", logo_out
             ], job_id)
             if res_l["success"]:
