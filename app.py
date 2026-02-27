@@ -23,6 +23,7 @@ API_SECRET = os.environ.get("API_SECRET", "")
 
 # Diccionario en memoria para tracking de jobs async
 jobs = {}  # job_id -> {"status": "processing/done/error", "result": {}, "error": ""}
+job_logs = {}  # job_id -> [log lines]
 
 
 def check_auth(req):
@@ -252,14 +253,30 @@ def process_reel():
 
 def _process_reel_worker(job_id: str, cfg: dict):
     """Worker que corre en background thread"""
+    import io, sys
+    job_logs[job_id] = []
+
+    class JobLogger:
+        def write(self, msg):
+            if msg.strip():
+                job_logs[job_id].append(msg.strip())
+            sys.__stdout__.write(msg)
+        def flush(self):
+            sys.__stdout__.flush()
+
+    old_stdout = sys.stdout
+    sys.stdout = JobLogger()
     try:
         result = _do_process_reel(job_id, cfg)
         jobs[job_id] = {"status": "done", "result": result, "error": None}
         print(f"[{job_id}] Job completado OK")
     except Exception as e:
+        error_detail = str(e)
         traceback.print_exc()
-        jobs[job_id] = {"status": "error", "result": None, "error": str(e)}
-        print(f"[{job_id}] Job fallido: {e}")
+        print(f"[{job_id}] FATAL ERROR: {error_detail}")
+        jobs[job_id] = {"status": "error", "result": None, "error": error_detail}
+    finally:
+        sys.stdout = old_stdout
 
 
 def _do_process_reel(job_id: str, cfg: dict):
@@ -456,7 +473,7 @@ def _do_process_reel(job_id: str, cfg: dict):
             subbed_path
         ], job_id)
         if not res["success"]:
-            raise Exception("Error en render final")
+            raise Exception(f"Error en render final (subtitulos): {res['error']}")
 
         after_subs = subbed_path
 
@@ -549,6 +566,16 @@ def job_status(job_id):
         return jsonify({"status": "error", "error": job["error"]}), 500
     else:
         return jsonify({"status": "processing"})
+
+
+@app.route("/job-logs/<job_id>", methods=["GET"])
+def get_job_logs(job_id):
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    safe = secure_filename(job_id)
+    logs = job_logs.get(safe, [])
+    status = jobs.get(safe, {}).get("status", "unknown")
+    return jsonify({"job_id": safe, "status": status, "logs": logs})
 
 
 @app.route("/download/<job_id>", methods=["GET"])
