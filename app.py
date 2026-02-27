@@ -404,67 +404,74 @@ def process_reel():
                     if res_b["success"]:
                         broll_inputs.append((bp_v, t_start, t_end))
 
-        # ── 10. Render final ──
+        # ── 10. Render final en pasos separados ──
+        # Paso A: subtitulos sobre video principal
+        # Paso B: b-rolls como overlay (no altera duracion ni audio)
+        # Paso C: logo encima (opcional)
         print(f"[{job_id}] Render final...")
 
-        if broll_inputs or has_logo:
-            # Construir filter_complex con subtitulos + b-rolls + logo
-            inputs = ["-i", current]
-            fc_parts = []
-            last_v = "[0:v]"
-
-            # Subtitulos primero sobre video principal
-            fc_parts.append(f"[0:v]ass={sub_file}{drawtext_filter}[v_subbed]")
-            last_v = "[v_subbed]"
-
-            # B-rolls como overlay en sus ventanas de tiempo
-            for idx, (bp_path, t_start, t_end) in enumerate(broll_inputs):
-                inputs += ["-i", bp_path]
-                inp_idx = idx + 1
-                out_label = f"[v_broll{idx}]"
-                # enable=between activa el overlay solo en esa ventana
-                fc_parts.append(
-                    f"{last_v}[{inp_idx}:v]overlay=0:0:enable='between(t,{t_start},{t_end})'{out_label}"
-                )
-                last_v = out_label
-
-            # Logo encima de todo
-            if has_logo:
-                logo_idx = len(broll_inputs) + 1
-                inputs += ["-i", logo_path]
-                pos_map = {"top-right": "W-w-40:40", "top-left": "40:40",
-                           "bottom-right": "W-w-40:H-h-40", "bottom-left": "40:H-h-40"}
-                logo_pos  = pos_map.get(cfg.get("overlay_image_pos", "top-right"), "W-w-40:40")
-                logo_size = int(cfg.get("overlay_image_size", 200))
-                fc_parts.append(f"[{logo_idx}:v]scale={logo_size}:-1[logo_scaled]")
-                fc_parts.append(f"{last_v}[logo_scaled]overlay={logo_pos}[v_final]")
-                last_v = "[v_final]"
-
-            fc_parts.append(f"{last_v}copy[vout]")
-            filter_complex = ";".join(fc_parts)
-
-            cmd = ["ffmpeg", "-y"] + inputs + [
-                "-filter_complex", filter_complex,
-                "-map", "[vout]", "-map", "0:a",
-                "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-                "-c:a", "aac", "-b:a", "192k",
-                output_path
-            ]
-            res = run_cmd(cmd, job_id)
-        else:
-            # Sin b-rolls ni logo — render simple
-            res = run_cmd([
-                "ffmpeg", "-y", "-i", current,
-                "-vf", f"ass={sub_file}{drawtext_filter}",
-                "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-                output_path
-            ], job_id)
-
+        subbed_path = p("subbed.mp4")
+        res = run_cmd([
+            "ffmpeg", "-y", "-i", current,
+            "-vf", f"ass={sub_file}{drawtext_filter}",
+            "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+            subbed_path
+        ], job_id)
         if not res["success"]:
             return jsonify({"error": "Error en render final", "detail": res["error"]}), 500
 
+        after_subs = subbed_path
+
+        # Paso B: b-rolls como overlay en ventanas de tiempo
+        if broll_inputs:
+            broll_out = p("brolled.mp4")
+            inputs_b = ["-i", after_subs]
+            fc_parts = []
+            last_v = "[0:v]"
+            for idx, (bp_path, t_start, t_end) in enumerate(broll_inputs):
+                inputs_b += ["-i", bp_path]
+                out_label = f"[v{idx}]"
+                fc_parts.append(
+                    f"{last_v}[{idx+1}:v]overlay=0:0:enable='between(t,{t_start},{t_end})'{out_label}"
+                )
+                last_v = out_label
+            res_b = run_cmd(
+                ["ffmpeg", "-y"] + inputs_b + [
+                    "-filter_complex", ";".join(fc_parts),
+                    "-map", last_v, "-map", "0:a",
+                    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                    "-c:a", "copy", broll_out
+                ], job_id)
+            if res_b["success"]:
+                after_subs = broll_out
+                print(f"[{job_id}] B-rolls aplicados OK")
+            else:
+                print(f"[{job_id}] B-roll overlay fallo, continuando sin b-rolls")
+
+        # Paso C: logo encima (opcional)
+        if has_logo:
+            logo_out = p("logoed.mp4")
+            pos_map = {"top-right": "W-w-40:40", "top-left": "40:40",
+                       "bottom-right": "W-w-40:H-h-40", "bottom-left": "40:H-h-40"}
+            logo_pos  = pos_map.get(cfg.get("overlay_image_pos", "top-right"), "W-w-40:40")
+            logo_size = int(cfg.get("overlay_image_size", 200))
+            res_l = run_cmd([
+                "ffmpeg", "-y", "-i", after_subs, "-i", logo_path,
+                "-filter_complex",
+                f"[1:v]scale={logo_size}:-1[logo];[0:v][logo]overlay={logo_pos}[vout]",
+                "-map", "[vout]", "-map", "0:a",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                "-c:a", "copy", logo_out
+            ], job_id)
+            if res_l["success"]:
+                after_subs = logo_out
+
+        # Mover resultado final a output_path
+        import shutil
+        shutil.move(after_subs, output_path)
+
         # Limpiar temporales
-        for f in [vertical_path, zoom_path, graded_path, sub_file, logo_path]:
+        for f in [vertical_path, zoom_path, graded_path, sub_file, logo_path, subbed_path]:
             try: os.remove(f)
             except: pass
         for bp_path, _, _ in broll_inputs:
