@@ -1,6 +1,5 @@
 """
 Reels Engine v2 - Microservicio FFmpeg para Railway
-ProspectOS / Configurable para cualquier usuario
 """
 
 import os
@@ -22,20 +21,12 @@ for d in [WORK_DIR, OUTPUT_DIR]:
 API_SECRET = os.environ.get("API_SECRET", "")
 
 
-# ═══════════════════════════════════════════════
-# AUTH
-# ═══════════════════════════════════════════════
-
 def check_auth(req):
     if not API_SECRET:
         return True
     token = req.headers.get("Authorization", "").replace("Bearer ", "")
     return token == API_SECRET
 
-
-# ═══════════════════════════════════════════════
-# UTILS
-# ═══════════════════════════════════════════════
 
 def run_cmd(cmd: list, job_id: str) -> dict:
     print(f"[{job_id}] CMD: {' '.join(str(c) for c in cmd)}")
@@ -55,7 +46,7 @@ def download_file(url: str, dest: str, job_id: str) -> bool:
             for chunk in r.iter_content(65536):
                 f.write(chunk)
         size_mb = os.path.getsize(dest) / 1024 / 1024
-        print(f"[{job_id}] Descargado: {size_mb:.1f}MB -> {dest}")
+        print(f"[{job_id}] Descargado: {size_mb:.1f}MB")
         return True
     except Exception as e:
         print(f"[{job_id}] Download error: {e}")
@@ -70,10 +61,6 @@ def seconds_to_ass(s: float) -> str:
     return f"{h}:{m:02d}:{sc:02d}.{cs:02d}"
 
 
-# ═══════════════════════════════════════════════
-# GENERADORES DE SUBTITULOS
-# ═══════════════════════════════════════════════
-
 def build_ass_header(cfg: dict) -> str:
     font        = cfg.get("sub_font", "Arial Black")
     size        = cfg.get("sub_font_size", 74)
@@ -85,9 +72,8 @@ def build_ass_header(cfg: dict) -> str:
     shadow      = cfg.get("sub_shadow", 2)
     alignment   = cfg.get("sub_position", 2)
     margin_v    = cfg.get("sub_margin_v", 180)
-
     return f"""[Script Info]
-Title: Reels Engine Subtitles
+Title: Reels Engine
 ScriptType: v4.00+
 PlayResX: 1080
 PlayResY: 1920
@@ -96,41 +82,38 @@ WrapStyle: 0
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
 Style: Default,{font},{size},&H00{primary},&H000000FF,&H00{outline_col},&H80000000,{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{alignment},60,60,{margin_v},1
-Style: Highlight,{font},{size},&H00{highlight},&H000000FF,&H00{outline_col},&H80000000,{bold},0,0,0,100,100,0,0,1,{outline},{shadow},{alignment},60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
 
 
-def subtitles_word_by_word(words: list, cfg: dict) -> str:
-    ass    = build_ass_header(cfg)
-    lines  = []
-    group  = int(cfg.get("sub_words_per_line", 4))
+def subtitles_word_by_word(words, cfg):
+    ass       = build_ass_header(cfg)
+    lines     = []
+    group     = int(cfg.get("sub_words_per_line", 4))
     highlight = cfg.get("sub_color_highlight", "00FFFF")
-    groups = [words[i:i+group] for i in range(0, len(words), group)]
+    primary   = cfg.get("sub_color_primary", "FFFFFF")
+    groups    = [words[i:i+group] for i in range(0, len(words), group)]
     for chunk in groups:
-        g_start = chunk[0].get("start", 0)
-        g_end   = chunk[-1].get("end", g_start + 1)
         for active_i, active_w in enumerate(chunk):
-            w_start = active_w.get("start", g_start)
-            w_end   = active_w.get("end",   g_end)
+            w_start = active_w.get("start", 0)
+            w_end   = active_w.get("end", w_start + 0.5)
             parts   = []
             for j, w in enumerate(chunk):
                 txt = w.get("word", "").strip()
                 if j == active_i:
-                    parts.append(f"{{\\c&H00{highlight}&}}{txt}{{\\c&H00{cfg.get('sub_color_primary','FFFFFF')}&}}")
+                    parts.append(f"{{\\c&H00{highlight}&}}{txt}{{\\c&H00{primary}&}}")
                 else:
                     parts.append(txt)
-            line = " ".join(parts)
-            lines.append(f"Dialogue: 0,{seconds_to_ass(w_start)},{seconds_to_ass(w_end)},Default,,0,0,0,,{line}")
+            lines.append(f"Dialogue: 0,{seconds_to_ass(w_start)},{seconds_to_ass(w_end)},Default,,0,0,0,,{' '.join(parts)}")
     return ass + "\n".join(lines)
 
 
-def subtitles_line_by_line(words: list, cfg: dict) -> str:
-    ass   = build_ass_header(cfg)
-    lines = []
-    group = int(cfg.get("sub_words_per_line", 5))
+def subtitles_line_by_line(words, cfg):
+    ass    = build_ass_header(cfg)
+    lines  = []
+    group  = int(cfg.get("sub_words_per_line", 5))
     groups = [words[i:i+group] for i in range(0, len(words), group)]
     for chunk in groups:
         g_start = chunk[0].get("start", 0)
@@ -140,12 +123,12 @@ def subtitles_line_by_line(words: list, cfg: dict) -> str:
     return ass + "\n".join(lines)
 
 
-def subtitles_karaoke(words: list, cfg: dict) -> str:
-    ass   = build_ass_header(cfg)
-    lines = []
-    group = int(cfg.get("sub_words_per_line", 5))
+def subtitles_karaoke(words, cfg):
+    ass       = build_ass_header(cfg)
+    lines     = []
+    group     = int(cfg.get("sub_words_per_line", 5))
     highlight = cfg.get("sub_color_highlight", "00FFFF")
-    groups = [words[i:i+group] for i in range(0, len(words), group)]
+    groups    = [words[i:i+group] for i in range(0, len(words), group)]
     for chunk in groups:
         g_start = chunk[0].get("start", 0)
         g_end   = chunk[-1].get("end", g_start + 1)
@@ -153,8 +136,7 @@ def subtitles_karaoke(words: list, cfg: dict) -> str:
         for w in chunk:
             dur_cs = int((w.get("end", 0) - w.get("start", 0)) * 100)
             parts.append(f"{{\\kf{dur_cs}}}{{\\c&H00{highlight}&}}{w.get('word','').strip()} ")
-        text = "".join(parts)
-        lines.append(f"Dialogue: 0,{seconds_to_ass(g_start)},{seconds_to_ass(g_end)},Default,,0,0,0,,{text}")
+        lines.append(f"Dialogue: 0,{seconds_to_ass(g_start)},{seconds_to_ass(g_end)},Default,,0,0,0,,{''.join(parts)}")
     return ass + "\n".join(lines)
 
 
@@ -165,17 +147,10 @@ SUBTITLE_BUILDERS = {
 }
 
 
-# ═══════════════════════════════════════════════
-# ENDPOINTS
-# ═══════════════════════════════════════════════
-
 @app.route("/health", methods=["GET"])
 def health():
     r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
-    return jsonify({
-        "status": "ok",
-        "ffmpeg": r.stdout.split("\n")[0] if r.returncode == 0 else "missing"
-    })
+    return jsonify({"status": "ok", "ffmpeg": r.stdout.split("\n")[0] if r.returncode == 0 else "missing"})
 
 
 @app.route("/upload-video", methods=["POST"])
@@ -208,9 +183,7 @@ def serve_video(job_id):
 def compress_audio():
     if not check_auth(request):
         return jsonify({"error": "Unauthorized"}), 401
-
     job_id = str(uuid.uuid4())[:8]
-
     try:
         raw_path   = f"{WORK_DIR}/{job_id}_raw"
         audio_path = f"{OUTPUT_DIR}/{job_id}_audio.mp3"
@@ -219,10 +192,7 @@ def compress_audio():
             f = request.files["file"]
             ext = os.path.splitext(f.filename)[1] if f.filename else ".mp4"
             raw_path += ext
-            print(f"[{job_id}] Recibiendo archivo binario: {f.filename} ({ext})")
             f.save(raw_path)
-            size_mb = os.path.getsize(raw_path) / 1024 / 1024
-            print(f"[{job_id}] Guardado: {size_mb:.1f}MB -> {raw_path}")
         elif request.is_json:
             data = request.get_json()
             video_url = data.get("video_url")
@@ -232,14 +202,11 @@ def compress_audio():
             if not download_file(video_url, raw_path, job_id):
                 return jsonify({"error": "No pude descargar el video"}), 400
         else:
-            return jsonify({"error": "Manda el video como multipart/form-data (campo 'file') o JSON con video_url"}), 400
+            return jsonify({"error": "Manda el video como multipart/form-data o JSON con video_url"}), 400
 
-        res = run_cmd([
-            "ffmpeg", "-y", "-i", raw_path,
-            "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k",
-            audio_path
-        ], job_id)
-
+        res = run_cmd(["ffmpeg", "-y", "-i", raw_path,
+                       "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k",
+                       audio_path], job_id)
         try: os.remove(raw_path)
         except: pass
 
@@ -247,15 +214,7 @@ def compress_audio():
             return jsonify({"error": "Error extrayendo audio", "detail": res["error"]}), 500
 
         size_mb = os.path.getsize(audio_path) / 1024 / 1024
-        print(f"[{job_id}] Audio extraido: {size_mb:.2f}MB")
-
-        return jsonify({
-            "success":   True,
-            "job_id":    job_id,
-            "audio_url": f"/download-audio/{job_id}",
-            "size_mb":   round(size_mb, 2)
-        })
-
+        return jsonify({"success": True, "job_id": job_id, "audio_url": f"/download-audio/{job_id}", "size_mb": round(size_mb, 2)})
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
@@ -263,12 +222,11 @@ def compress_audio():
 
 @app.route("/download-audio/<job_id>", methods=["GET"])
 def download_audio(job_id):
-    safe   = secure_filename(job_id)
-    path   = f"{OUTPUT_DIR}/{safe}_audio.mp3"
+    safe = secure_filename(job_id)
+    path = f"{OUTPUT_DIR}/{safe}_audio.mp3"
     if not os.path.exists(path):
         return jsonify({"error": "Audio no encontrado"}), 404
-    return send_file(path, mimetype="audio/mpeg", as_attachment=True,
-                     download_name=f"audio_{safe}.mp3")
+    return send_file(path, mimetype="audio/mpeg", as_attachment=True, download_name=f"audio_{safe}.mp3")
 
 
 @app.route("/process-reel", methods=["POST"])
@@ -282,7 +240,7 @@ def process_reel():
     try:
         print(f"\n[{job_id}] === NUEVO REEL ===")
 
-        p = lambda name: f"{WORK_DIR}/{job_id}_{name}"
+        p             = lambda name: f"{WORK_DIR}/{job_id}_{name}"
         raw_path      = p("raw.mp4")
         clip_path     = p("clip.mp4")
         vertical_path = p("vertical.mp4")
@@ -301,7 +259,7 @@ def process_reel():
             return jsonify({"error": "No pude descargar el video"}), 400
 
         # ── 2. Cortar clip ──
-        print(f"[{job_id}] Cortando {clip_start}s -> {clip_end}s ({duration:.1f}s)")
+        print(f"[{job_id}] Cortando {clip_start}s -> {clip_end}s")
         res = run_cmd(["ffmpeg", "-y", "-i", raw_path,
                        "-ss", str(clip_start), "-to", str(clip_end),
                        "-c", "copy", clip_path], job_id)
@@ -310,15 +268,14 @@ def process_reel():
         try: os.remove(raw_path)
         except: pass
 
-        # ── 3. Verticalizar 9:16 con deteccion de rotacion ──
+        # ── 3. Verticalizar con deteccion de rotacion ──
         probe = subprocess.run(
             ["ffprobe", "-v", "quiet", "-print_format", "json", "-show_streams", clip_path],
             capture_output=True, text=True
         )
         rotation = 0
         try:
-            probe_data = json.loads(probe.stdout)
-            for stream in probe_data.get("streams", []):
+            for stream in json.loads(probe.stdout).get("streams", []):
                 rot = stream.get("tags", {}).get("rotate", "0")
                 rotation = int(rot)
                 break
@@ -326,14 +283,7 @@ def process_reel():
             pass
 
         print(f"[{job_id}] Verticalizando (rotacion: {rotation})")
-        if rotation == 90:
-            vf_rotate = "transpose=1,"
-        elif rotation == 270 or rotation == -90:
-            vf_rotate = "transpose=2,"
-        elif rotation == 180:
-            vf_rotate = "transpose=1,transpose=1,"
-        else:
-            vf_rotate = ""
+        vf_rotate = {90: "transpose=1,", 270: "transpose=2,", -90: "transpose=2,", 180: "transpose=1,transpose=1,"}.get(rotation, "")
 
         res = run_cmd(["ffmpeg", "-y", "-i", clip_path,
                        "-vf", f"{vf_rotate}scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
@@ -347,214 +297,162 @@ def process_reel():
 
         current = vertical_path
 
-        # ── 4. Zoom dinamico en energy_moments ──
-        zoom_enabled   = cfg.get("zoom_enabled", True)
-        energy_moments = cfg.get("energy_moments", [])
-
-        if zoom_enabled and energy_moments:
-            print(f"[{job_id}] Zoom en {len(energy_moments)} momentos...")
+        # ── 4. Zoom en energy_moments ──
+        if cfg.get("zoom_enabled", True) and cfg.get("energy_moments"):
             intensity = float(cfg.get("zoom_intensity", 0.08))
             zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
             fps       = 30
             step      = intensity / (fps * zoom_dur / 2)
-
-            valid_moments = [
-                float(m) - clip_start
-                for m in energy_moments[:3]
-                if clip_start < float(m) < clip_end
-            ]
-
+            valid_moments = [float(m) - clip_start for m in cfg["energy_moments"][:3]
+                             if clip_start < float(m) < clip_end]
             if valid_moments:
                 m0   = valid_moments[0]
                 sf   = int(m0 * fps)
                 ef   = sf + int(fps * zoom_dur)
                 half = (ef - sf) // 2
-                zoom_expr = (
-                    f"if(between(on,{sf},{sf+half}),min(zoom+{step:.5f},1+{intensity}),"
-                    f"if(between(on,{sf+half},{ef}),max(zoom-{step:.5f},1.0),1.0))"
-                )
+                zoom_expr = (f"if(between(on,{sf},{sf+half}),min(zoom+{step:.5f},1+{intensity}),"
+                             f"if(between(on,{sf+half},{ef}),max(zoom-{step:.5f},1.0),1.0))")
                 res = run_cmd(["ffmpeg", "-y", "-i", current,
                                "-vf", f"zoompan=z='{zoom_expr}':d=1:s=1080x1920:fps={fps}",
                                "-c:a", "copy", zoom_path], job_id)
                 if res["success"]:
                     current = zoom_path
-                else:
-                    print(f"[{job_id}] Zoom fallo, continuando sin zoom")
 
         # ── 5. Color grade ──
-        grade = cfg.get("color_grade", "energetic")
         grades = {
             "energetic":    "eq=contrast=1.15:saturation=1.3:brightness=0.02:gamma=0.95",
             "professional": "eq=contrast=1.05:saturation=0.85:brightness=0.0",
             "calm":         "eq=contrast=1.0:saturation=1.1:brightness=0.01",
-            "none":         None
         }
-        vf_grade = grades.get(grade)
+        vf_grade = grades.get(cfg.get("color_grade", "energetic"))
         vignette  = cfg.get("vignette_enabled", False)
-
         if vf_grade or vignette:
             filters = []
-            if vf_grade:
-                filters.append(vf_grade)
-            if vignette:
-                filters.append("vignette=PI/5")
-            vf_str = ",".join(filters)
-            print(f"[{job_id}] Color grade: {grade}")
+            if vf_grade: filters.append(vf_grade)
+            if vignette: filters.append("vignette=PI/5")
             res = run_cmd(["ffmpeg", "-y", "-i", current,
-                           "-vf", vf_str,
+                           "-vf", ",".join(filters),
                            "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
                            graded_path], job_id)
             if res["success"]:
                 current = graded_path
 
-        # ── 6. B-rolls intercalados ──
-        # Los b-rolls se insertan en segundos 10, 25, 40 del clip
-        # Durante el b-roll el audio principal continua
-        broll_urls = cfg.get("broll_urls", [])
-        if broll_urls:
-            print(f"[{job_id}] Procesando {len(broll_urls)} b-rolls...")
-            broll_paths = []
-            for i, url in enumerate(broll_urls[:3]):
-                bp_raw = p(f"broll_{i}_raw.mp4")
-                bp_v   = p(f"broll_{i}.mp4")
-                if download_file(url, bp_raw, job_id):
-                    res_b = run_cmd(["ffmpeg", "-y", "-i", bp_raw,
-                        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
-                        "-t", "5",
-                        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-                        "-an", bp_v], job_id)
-                    try: os.remove(bp_raw)
-                    except: pass
-                    if res_b["success"]:
-                        broll_paths.append(bp_v)
-
-            if broll_paths:
-                # Extraer audio del video principal completo
-                audio_main = p("audio_main.aac")
-                run_cmd(["ffmpeg", "-y", "-i", current,
-                    "-vn", "-c:a", "copy", audio_main], job_id)
-
-                # Construir segmentos de video (sin audio)
-                insert_points = [10.0, 25.0, 40.0]
-                seg_paths = []
-                prev = 0.0
-                used = 0
-
-                for pt in insert_points:
-                    if pt >= duration or used >= len(broll_paths):
-                        break
-                    # Segmento principal hasta el punto
-                    seg = p(f"vseg_{len(seg_paths)}.mp4")
-                    run_cmd(["ffmpeg", "-y", "-i", current,
-                        "-ss", str(prev), "-t", str(pt - prev),
-                        "-an", "-c:v", "copy", seg], job_id)
-                    seg_paths.append(seg)
-                    # B-roll (ya sin audio)
-                    seg_paths.append(broll_paths[used])
-                    used += 1
-                    prev = pt
-
-                # Segmento final
-                seg = p("vseg_final.mp4")
-                run_cmd(["ffmpeg", "-y", "-i", current,
-                    "-ss", str(prev), "-an", "-c:v", "copy", seg], job_id)
-                seg_paths.append(seg)
-
-                # Concat solo video
-                concat_list = p("concat.txt")
-                with open(concat_list, "w") as cf:
-                    for s in seg_paths:
-                        cf.write(f"file '{s}'\n")
-
-                video_only = p("video_only.mp4")
-                res_concat = run_cmd(["ffmpeg", "-y", "-f", "concat", "-safe", "0",
-                    "-i", concat_list,
-                    "-c:v", "libx264", "-preset", "fast", "-crf", "22",
-                    "-an", video_only], job_id)
-
-                if res_concat["success"] and os.path.exists(audio_main):
-                    # Combinar video con audio principal (audio continuo)
-                    broll_output = p("with_brolls.mp4")
-                    res_merge = run_cmd(["ffmpeg", "-y",
-                        "-i", video_only,
-                        "-i", audio_main,
-                        "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
-                        "-shortest", broll_output], job_id)
-                    if res_merge["success"]:
-                        current = broll_output
-                        print(f"[{job_id}] B-rolls insertados OK")
-                    else:
-                        print(f"[{job_id}] Merge audio fallo, continuando sin b-rolls")
-                else:
-                    print(f"[{job_id}] Concat fallo, continuando sin b-rolls")
-
-                # Limpiar temporales de b-rolls
-                for s in seg_paths + broll_paths:
-                    try: os.remove(s)
-                    except: pass
-                for f in [concat_list, audio_main, video_only]:
-                    try: os.remove(f)
-                    except: pass
-
-        # ── 7. Generar subtitulos ──
+        # ── 6. Subtitulos ──
         words = cfg.get("words", [])
         adjusted = [
-            {**w, "start": float(w["start"]) - clip_start,
-                   "end":   float(w["end"])   - clip_start}
+            {**w, "start": float(w["start"]) - clip_start, "end": float(w["end"]) - clip_start}
             for w in words
             if clip_start <= float(w.get("start", 0)) <= clip_end
         ]
-
         sub_style   = cfg.get("subtitle_style", "word_highlight")
         builder     = SUBTITLE_BUILDERS.get(sub_style, subtitles_word_by_word)
         ass_content = builder(adjusted, cfg)
-
         with open(sub_file, "w", encoding="utf-8") as f:
             f.write(ass_content)
-        print(f"[{job_id}] Subtitulos '{sub_style}': {len(adjusted)} palabras")
+        print(f"[{job_id}] Subtitulos: {len(adjusted)} palabras")
 
-        # ── 8. Overlay de texto ──
-        overlay_text     = cfg.get("overlay_text", "").replace("'", "\\'").replace(":", "\\:")
-        overlay_text_pos = cfg.get("overlay_text_pos", "bottom")
-        drawtext_filter  = ""
+        # ── 7. Overlay de texto ──
+        overlay_text    = cfg.get("overlay_text", "").replace("'", "\\'").replace(":", "\\:")
+        drawtext_filter = ""
         if overlay_text:
-            y_expr = "h-120" if overlay_text_pos == "bottom" else "60"
+            y_expr = "h-120" if cfg.get("overlay_text_pos", "bottom") == "bottom" else "60"
             drawtext_filter = (
                 f",drawtext=text='{overlay_text}'"
                 f":fontfile=/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
-                f":fontsize=44:fontcolor=white"
-                f":x=(w-text_w)/2:y={y_expr}"
+                f":fontsize=44:fontcolor=white:x=(w-text_w)/2:y={y_expr}"
                 f":box=1:boxcolor=black@0.55:boxborderw=14"
             )
 
-        # ── 9. Render final con subtitulos y logo ──
+        # ── 8. Logo ──
         overlay_image_url = cfg.get("overlay_image_url", "")
         has_logo = False
         if overlay_image_url:
             has_logo = download_file(overlay_image_url, logo_path, job_id)
 
+        # ── 9. B-rolls como overlay visual (no alargan duracion) ──
+        # Cada b-roll reemplaza el video visualmente en su ventana de tiempo
+        # El audio del video principal continua sin interrupciones
+        broll_urls = cfg.get("broll_urls", [])
+        broll_inputs = []
+        broll_filters = []
+
+        if broll_urls:
+            print(f"[{job_id}] Preparando {len(broll_urls)} b-rolls como overlay...")
+            # Ventanas de tiempo para cada b-roll: seg 8-13, 22-27, 38-43
+            broll_windows = [(8, 13), (22, 27), (38, 43)]
+
+            for i, url in enumerate(broll_urls[:3]):
+                if i >= len(broll_windows):
+                    break
+                bp_raw = p(f"broll_{i}_raw.mp4")
+                bp_v   = p(f"broll_{i}.mp4")
+                t_start, t_end = broll_windows[i]
+                broll_dur = t_end - t_start
+
+                # Solo descargar si la ventana cabe en la duracion del clip
+                if t_start >= duration:
+                    continue
+
+                if download_file(url, bp_raw, job_id):
+                    res_b = run_cmd(["ffmpeg", "-y", "-i", bp_raw,
+                        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
+                        "-t", str(broll_dur),
+                        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                        "-an", bp_v], job_id)
+                    try: os.remove(bp_raw)
+                    except: pass
+                    if res_b["success"]:
+                        broll_inputs.append((bp_v, t_start, t_end))
+
+        # ── 10. Render final ──
         print(f"[{job_id}] Render final...")
 
-        if has_logo:
-            pos_map = {
-                "top-right":    "W-w-40:40",
-                "top-left":     "40:40",
-                "bottom-right": "W-w-40:H-h-40",
-                "bottom-left":  "40:H-h-40",
-            }
-            logo_pos  = pos_map.get(cfg.get("overlay_image_pos", "top-right"), "W-w-40:40")
-            logo_size = int(cfg.get("overlay_image_size", 200))
-            res = run_cmd([
-                "ffmpeg", "-y",
-                "-i", current, "-i", logo_path,
-                "-filter_complex",
-                f"[0:v]ass={sub_file}{drawtext_filter}[subbed];"
-                f"[1:v]scale={logo_size}:-1[logo];"
-                f"[subbed][logo]overlay={logo_pos}",
-                "-c:a", "copy", "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+        if broll_inputs or has_logo:
+            # Construir filter_complex con subtitulos + b-rolls + logo
+            inputs = ["-i", current]
+            fc_parts = []
+            last_v = "[0:v]"
+
+            # Subtitulos primero sobre video principal
+            fc_parts.append(f"[0:v]ass={sub_file}{drawtext_filter}[v_subbed]")
+            last_v = "[v_subbed]"
+
+            # B-rolls como overlay en sus ventanas de tiempo
+            for idx, (bp_path, t_start, t_end) in enumerate(broll_inputs):
+                inputs += ["-i", bp_path]
+                inp_idx = idx + 1
+                out_label = f"[v_broll{idx}]"
+                # enable=between activa el overlay solo en esa ventana
+                fc_parts.append(
+                    f"{last_v}[{inp_idx}:v]overlay=0:0:enable='between(t,{t_start},{t_end})'{out_label}"
+                )
+                last_v = out_label
+
+            # Logo encima de todo
+            if has_logo:
+                logo_idx = len(broll_inputs) + 1
+                inputs += ["-i", logo_path]
+                pos_map = {"top-right": "W-w-40:40", "top-left": "40:40",
+                           "bottom-right": "W-w-40:H-h-40", "bottom-left": "40:H-h-40"}
+                logo_pos  = pos_map.get(cfg.get("overlay_image_pos", "top-right"), "W-w-40:40")
+                logo_size = int(cfg.get("overlay_image_size", 200))
+                fc_parts.append(f"[{logo_idx}:v]scale={logo_size}:-1[logo_scaled]")
+                fc_parts.append(f"{last_v}[logo_scaled]overlay={logo_pos}[v_final]")
+                last_v = "[v_final]"
+
+            fc_parts.append(f"{last_v}copy[vout]")
+            filter_complex = ";".join(fc_parts)
+
+            cmd = ["ffmpeg", "-y"] + inputs + [
+                "-filter_complex", filter_complex,
+                "-map", "[vout]", "-map", "0:a",
+                "-c:v", "libx264", "-preset", "fast", "-crf", "22",
+                "-c:a", "aac", "-b:a", "192k",
                 output_path
-            ], job_id)
+            ]
+            res = run_cmd(cmd, job_id)
         else:
+            # Sin b-rolls ni logo — render simple
             res = run_cmd([
                 "ffmpeg", "-y", "-i", current,
                 "-vf", f"ass={sub_file}{drawtext_filter}",
@@ -565,9 +463,12 @@ def process_reel():
         if not res["success"]:
             return jsonify({"error": "Error en render final", "detail": res["error"]}), 500
 
-        # ── Limpiar temporales ──
+        # Limpiar temporales
         for f in [vertical_path, zoom_path, graded_path, sub_file, logo_path]:
             try: os.remove(f)
+            except: pass
+        for bp_path, _, _ in broll_inputs:
+            try: os.remove(bp_path)
             except: pass
 
         output_size_mb = round(os.path.getsize(output_path) / 1024 / 1024, 1)
@@ -579,7 +480,8 @@ def process_reel():
             "output_url":      f"/download/{job_id}",
             "duration":        round(duration, 1),
             "output_size_mb":  output_size_mb,
-            "subtitles_words": len(adjusted)
+            "subtitles_words": len(adjusted),
+            "brolls_applied":  len(broll_inputs)
         })
 
     except Exception as e:
@@ -593,8 +495,7 @@ def download_video(job_id):
     path = f"{OUTPUT_DIR}/{safe}_reel.mp4"
     if not os.path.exists(path):
         return jsonify({"error": "Video no encontrado"}), 404
-    return send_file(path, mimetype="video/mp4", as_attachment=True,
-                     download_name=f"reel_{safe}.mp4")
+    return send_file(path, mimetype="video/mp4", as_attachment=True, download_name=f"reel_{safe}.mp4")
 
 
 @app.route("/search-brolls", methods=["POST"])
@@ -610,12 +511,10 @@ def search_brolls():
     if not pexels_key:
         return jsonify({"error": "Falta PEXELS_API_KEY"}), 500
     try:
-        r = requests.get(
-            "https://api.pexels.com/videos/search",
+        r = requests.get("https://api.pexels.com/videos/search",
             headers={"Authorization": pexels_key},
             params={"query": keywords[0], "per_page": count, "orientation": "portrait"},
-            timeout=30
-        )
+            timeout=30)
         r.raise_for_status()
         videos = r.json().get("videos", [])
         urls = [(v.get("video_files") or [{}])[0].get("link", "") for v in videos if v.get("video_files")]
