@@ -473,9 +473,11 @@ def _do_process_reel(job_id: str, cfg: dict):
                 actual_dur = t_end - t_start
 
                 if download_file(url, bp_raw, job_id):
-                    res_b = run_cmd(["ffmpeg", "-y", "-stream_loop", "-1", "-i", bp_raw,
-                        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
-                        "-t", str(actual_dur),
+                    # stream_loop antes del input para loopearlo, -t despues del input para cortar
+                    res_b = run_cmd(["ffmpeg", "-y",
+                        "-stream_loop", "-1", "-i", bp_raw,
+                        "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps=30",
+                        "-t", str(actual_dur + 1),
                         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
                         "-an", bp_v], job_id)
                     try: os.remove(bp_raw)
