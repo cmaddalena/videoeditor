@@ -378,31 +378,41 @@ def process_reel():
 
         if broll_urls:
             print(f"[{job_id}] Preparando {len(broll_urls)} b-rolls como overlay...")
-            # Ventanas de tiempo para cada b-roll: seg 8-13, 22-27, 38-43
-            broll_windows = [(8, 13), (22, 27), (38, 43)]
+            # broll_seconds viene de n8n con los timestamps exactos que eligio GPT
+            # Si no viene, usamos ventanas fijas como fallback
+            broll_seconds = cfg.get("broll_seconds", [])
+            broll_duration = 5  # cada b-roll dura 5 segundos
 
-            for i, url in enumerate(broll_urls[:3]):
-                if i >= len(broll_windows):
-                    break
+            for i, url in enumerate(broll_urls):
+                # Obtener el segundo de inicio para este b-roll
+                if i < len(broll_seconds):
+                    t_start = float(broll_seconds[i])
+                else:
+                    # Fallback: distribuir uniformemente en el clip
+                    t_start = (duration / (len(broll_urls) + 1)) * (i + 1)
+
+                t_end = min(t_start + broll_duration, duration - 1)
+
+                # Saltar si el momento no cabe en el clip
+                if t_start >= duration - 2:
+                    print(f"[{job_id}] B-roll {i} en segundo {t_start} fuera del clip ({duration}s), saltando")
+                    continue
+
                 bp_raw = p(f"broll_{i}_raw.mp4")
                 bp_v   = p(f"broll_{i}.mp4")
-                t_start, t_end = broll_windows[i]
-                broll_dur = t_end - t_start
-
-                # Solo descargar si la ventana cabe en la duracion del clip
-                if t_start >= duration:
-                    continue
+                actual_dur = t_end - t_start
 
                 if download_file(url, bp_raw, job_id):
                     res_b = run_cmd(["ffmpeg", "-y", "-i", bp_raw,
                         "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
-                        "-t", str(broll_dur),
+                        "-t", str(actual_dur),
                         "-c:v", "libx264", "-preset", "fast", "-crf", "22",
                         "-an", bp_v], job_id)
                     try: os.remove(bp_raw)
                     except: pass
                     if res_b["success"]:
                         broll_inputs.append((bp_v, t_start, t_end))
+                        print(f"[{job_id}] B-roll {i} listo: {t_start}s-{t_end}s")
 
         # ── 10. Render final en pasos separados ──
         # Paso A: subtitulos sobre video principal
