@@ -8,6 +8,7 @@ import uuid
 import subprocess
 import requests
 import traceback
+import threading
 from flask import Flask, request, jsonify, send_file
 from werkzeug.utils import secure_filename
 
@@ -19,6 +20,9 @@ for d in [WORK_DIR, OUTPUT_DIR]:
     os.makedirs(d, exist_ok=True)
 
 API_SECRET = os.environ.get("API_SECRET", "")
+
+# Diccionario en memoria para tracking de jobs async
+jobs = {}  # job_id -> {"status": "processing/done/error", "result": {}, "error": ""}
 
 
 def check_auth(req):
@@ -237,6 +241,29 @@ def process_reel():
     job_id = str(uuid.uuid4())[:8]
     cfg    = request.json or {}
 
+    # Registrar job como "processing" y lanzar en background
+    jobs[job_id] = {"status": "processing", "result": None, "error": None}
+    thread = threading.Thread(target=_process_reel_worker, args=(job_id, cfg), daemon=True)
+    thread.start()
+
+    print(f"[{job_id}] Job lanzado en background")
+    return jsonify({"success": True, "job_id": job_id, "status": "processing"})
+
+
+def _process_reel_worker(job_id: str, cfg: dict):
+    """Worker que corre en background thread"""
+    try:
+        result = _do_process_reel(job_id, cfg)
+        jobs[job_id] = {"status": "done", "result": result, "error": None}
+        print(f"[{job_id}] Job completado OK")
+    except Exception as e:
+        traceback.print_exc()
+        jobs[job_id] = {"status": "error", "result": None, "error": str(e)}
+        print(f"[{job_id}] Job fallido: {e}")
+
+
+def _do_process_reel(job_id: str, cfg: dict):
+    """Lógica principal de procesamiento — igual que antes"""
     try:
         print(f"\n[{job_id}] === NUEVO REEL ===")
 
@@ -504,6 +531,23 @@ def process_reel():
     except Exception as e:
         traceback.print_exc()
         return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/job-status/<job_id>", methods=["GET"])
+def job_status(job_id):
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    safe = secure_filename(job_id)
+    job = jobs.get(safe)
+    if not job:
+        return jsonify({"error": "Job no encontrado"}), 404
+    if job["status"] == "done":
+        return jsonify({"status": "done", **job["result"]})
+    elif job["status"] == "error":
+        return jsonify({"status": "error", "error": job["error"]}), 500
+    else:
+        return jsonify({"status": "processing"})
 
 
 @app.route("/download/<job_id>", methods=["GET"])
