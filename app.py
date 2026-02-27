@@ -503,8 +503,11 @@ def _do_process_reel(job_id: str, cfg: dict):
             for idx, (bp_path, t_start, t_end) in enumerate(broll_inputs):
                 inputs_b += ["-i", bp_path]
                 out_label = f"[v{idx}]"
+                # setpts resetea timestamp del broll para que empiece desde 0
+                # itsoffset sincroniza el broll con el momento correcto del video
                 fc_parts.append(
-                    f"{last_v}[{idx+1}:v]overlay=0:0:enable='between(t,{t_start},{t_end})'{out_label}"
+                    f"[{idx+1}:v]setpts=PTS-STARTPTS+{t_start}/TB[broll{idx}];"
+                    f"{last_v}[broll{idx}]overlay=0:0:enable='between(t,{t_start},{t_end})'{out_label}"
                 )
                 last_v = out_label
             res_b = run_cmd(
