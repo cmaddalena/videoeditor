@@ -330,8 +330,9 @@ def _do_process_reel(job_id: str, cfg: dict):
             zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
             fps       = 30
             step      = intensity / (fps * zoom_dur / 2)
-            valid_moments = [float(m) - clip_start for m in cfg["energy_moments"][:3]
-                             if clip_start < float(m) < clip_end]
+            def em_val(m): return float(m["second"] if isinstance(m, dict) else m)
+            valid_moments = [em_val(m) - clip_start for m in cfg["energy_moments"][:3]
+                             if clip_start < em_val(m) < clip_end]
             if valid_moments:
                 m0   = valid_moments[0]
                 sf   = int(m0 * fps)
