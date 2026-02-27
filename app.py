@@ -344,27 +344,49 @@ def _do_process_reel(job_id: str, cfg: dict):
 
         current = vertical_path
 
-        # ── 4. Zoom en energy_moments ──
+        # ── 4. Zoom en energy_moments (scale+crop, liviano) ──
         if cfg.get("zoom_enabled", True) and cfg.get("energy_moments"):
-            intensity = float(cfg.get("zoom_intensity", 0.08))
-            zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
-            fps       = 30
-            step      = intensity / (fps * zoom_dur / 2)
             def em_val(m): return float(m["second"] if isinstance(m, dict) else m)
             valid_moments = [em_val(m) - clip_start for m in cfg["energy_moments"][:3]
                              if clip_start < em_val(m) < clip_end]
             if valid_moments:
-                m0   = valid_moments[0]
-                sf   = int(m0 * fps)
-                ef   = sf + int(fps * zoom_dur)
-                half = (ef - sf) // 2
-                zoom_expr = (f"if(between(on,{sf},{sf+half}),min(zoom+{step:.5f},1+{intensity}),"
-                             f"if(between(on,{sf+half},{ef}),max(zoom-{step:.5f},1.0),1.0))")
+                intensity = float(cfg.get("zoom_intensity", 0.08))
+                zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
+                # Construir filtro de zoom por segmentos usando scale+crop
+                zoom_scale = 1.0 + intensity
+                sw = int(1080 * zoom_scale)
+                sh = int(1920 * zoom_scale)
+                zoom_filters = []
+                for mt in valid_moments:
+                    t0 = round(mt, 2)
+                    t1 = round(mt + zoom_dur, 2)
+                    zoom_filters.append(
+                        f"if(between(t,{t0},{t1}),{sw},{int(1080)})"
+                    )
+                # Zoom en todos los energy_moments
+                def make_between(moments, val_zoom, val_normal):
+                    expr = str(val_normal)
+                    for mt in reversed(moments):
+                        t0 = round(mt, 2)
+                        t1 = round(mt + zoom_dur, 2)
+                        expr = f"if(between(t,{t0},{t1}),{val_zoom},{expr})"
+                    return expr
+
+                w_expr = make_between(valid_moments, sw, 1080)
+                h_expr = make_between(valid_moments, sh, 1920)
+                vf_zoom = (
+                    f"scale=w='{w_expr}':h='{h_expr}',"
+                    f"crop=1080:1920:(iw-1080)/2:(ih-1920)/2"
+                )
                 res = run_cmd(["ffmpeg", "-y", "-i", current,
-                               "-vf", f"zoompan=z='{zoom_expr}':d=1:s=1080x1920:fps={fps}",
-                               "-c:a", "copy", zoom_path], job_id)
+                               "-vf", vf_zoom,
+                               "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                               zoom_path], job_id)
                 if res["success"]:
                     current = zoom_path
+                    print(f"[{job_id}] Zoom aplicado en {valid_moments[0]:.1f}s")
+                else:
+                    print(f"[{job_id}] Zoom fallo, continuando sin zoom")
 
         # ── 5. Color grade ──
         grades = {
@@ -451,7 +473,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                 actual_dur = t_end - t_start
 
                 if download_file(url, bp_raw, job_id):
-                    res_b = run_cmd(["ffmpeg", "-y", "-i", bp_raw,
+                    res_b = run_cmd(["ffmpeg", "-y", "-stream_loop", "-1", "-i", bp_raw,
                         "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1",
                         "-t", str(actual_dur),
                         "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
@@ -463,27 +485,17 @@ def _do_process_reel(job_id: str, cfg: dict):
                         print(f"[{job_id}] B-roll {i} listo: {t_start}s-{t_end}s")
 
         # ── 10. Render final en pasos separados ──
-        # Paso A: subtitulos sobre video principal
-        # Paso B: b-rolls como overlay (no altera duracion ni audio)
+        # Paso A: b-rolls como overlay (debajo de subtitulos)
+        # Paso B: subtitulos encima de todo
         # Paso C: logo encima (opcional)
         print(f"[{job_id}] Render final...")
 
-        subbed_path = p("subbed.mp4")
-        res = run_cmd([
-            "ffmpeg", "-y", "-i", current,
-            "-vf", f"ass={sub_file}{drawtext_filter}",
-            "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-            subbed_path
-        ], job_id)
-        if not res["success"]:
-            raise Exception(f"Error en render final (subtitulos): {res['error']}")
+        after_brolls = current
 
-        after_subs = subbed_path
-
-        # Paso B: b-rolls como overlay en ventanas de tiempo
+        # Paso A: b-rolls como overlay en ventanas de tiempo
         if broll_inputs:
             broll_out = p("brolled.mp4")
-            inputs_b = ["-i", after_subs]
+            inputs_b = ["-i", current]
             fc_parts = []
             last_v = "[0:v]"
             for idx, (bp_path, t_start, t_end) in enumerate(broll_inputs):
@@ -501,10 +513,23 @@ def _do_process_reel(job_id: str, cfg: dict):
                     "-c:a", "copy", broll_out
                 ], job_id)
             if res_b["success"]:
-                after_subs = broll_out
+                after_brolls = broll_out
                 print(f"[{job_id}] B-rolls aplicados OK")
             else:
                 print(f"[{job_id}] B-roll overlay fallo, continuando sin b-rolls")
+
+        # Paso B: subtitulos ENCIMA de b-rolls
+        subbed_path = p("subbed.mp4")
+        res = run_cmd([
+            "ffmpeg", "-y", "-i", after_brolls,
+            "-vf", f"ass={sub_file}{drawtext_filter}",
+            "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+            subbed_path
+        ], job_id)
+        if not res["success"]:
+            raise Exception(f"Error en render final (subtitulos): {res['error']}")
+
+        after_subs = subbed_path
 
         # Paso C: logo encima (opcional)
         if has_logo:
