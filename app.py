@@ -344,7 +344,7 @@ def _do_process_reel(job_id: str, cfg: dict):
 
         current = vertical_path
 
-        # ── 4. Zoom en energy_moments (scale+crop, liviano) ──
+        # ── 4. Zoom en energy_moments via overlay ──
         if cfg.get("zoom_enabled", True) and cfg.get("energy_moments"):
             def em_val(m): return float(m["second"] if isinstance(m, dict) else m)
             valid_moments = [em_val(m) - clip_start for m in cfg["energy_moments"][:3]
@@ -352,41 +352,39 @@ def _do_process_reel(job_id: str, cfg: dict):
             if valid_moments:
                 intensity = float(cfg.get("zoom_intensity", 0.08))
                 zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
-                # Construir filtro de zoom por segmentos usando scale+crop
-                zoom_scale = 1.0 + intensity
-                sw = int(1080 * zoom_scale)
-                sh = int(1920 * zoom_scale)
-                zoom_filters = []
-                for mt in valid_moments:
-                    t0 = round(mt, 2)
-                    t1 = round(mt + zoom_dur, 2)
-                    zoom_filters.append(
-                        f"if(between(t,{t0},{t1}),{sw},{int(1080)})"
-                    )
-                # Zoom en todos los energy_moments
-                def make_between(moments, val_zoom, val_normal):
-                    expr = str(val_normal)
-                    for mt in reversed(moments):
+                sw = int(1080 * (1 + intensity))
+                sh = int(1920 * (1 + intensity))
+                ox = (sw - 1080) // 2
+                oy = (sh - 1920) // 2
+                zoom_scaled = p("zoom_scaled.mp4")
+                res_scale = run_cmd(["ffmpeg", "-y", "-i", current,
+                    "-vf", f"scale={sw}:{sh},crop=1080:1920:{ox}:{oy}",
+                    "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                    zoom_scaled], job_id)
+                if res_scale["success"]:
+                    inputs_z = ["-i", current, "-i", zoom_scaled]
+                    fc_parts_z = []
+                    last_vz = "[0:v]"
+                    for idx, mt in enumerate(valid_moments):
                         t0 = round(mt, 2)
                         t1 = round(mt + zoom_dur, 2)
-                        expr = f"if(between(t,{t0},{t1}),{val_zoom},{expr})"
-                    return expr
-
-                w_expr = make_between(valid_moments, sw, 1080)
-                h_expr = make_between(valid_moments, sh, 1920)
-                vf_zoom = (
-                    f"scale=w='{w_expr}':h='{h_expr}',"
-                    f"crop=1080:1920:(iw-1080)/2:(ih-1920)/2"
-                )
-                res = run_cmd(["ffmpeg", "-y", "-i", current,
-                               "-vf", vf_zoom,
-                               "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-                               zoom_path], job_id)
-                if res["success"]:
-                    current = zoom_path
-                    print(f"[{job_id}] Zoom aplicado en {valid_moments[0]:.1f}s")
-                else:
-                    print(f"[{job_id}] Zoom fallo, continuando sin zoom")
+                        out_label = f"[z{idx}]"
+                        fc_parts_z.append(
+                            f"{last_vz}[1:v]overlay=0:0:enable='between(t,{t0},{t1})'{out_label}"
+                        )
+                        last_vz = out_label
+                    res = run_cmd(["ffmpeg", "-y"] + inputs_z + [
+                        "-filter_complex", ";".join(fc_parts_z),
+                        "-map", last_vz, "-map", "0:a",
+                        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                        "-c:a", "copy", zoom_path], job_id)
+                    try: os.remove(zoom_scaled)
+                    except: pass
+                    if res["success"]:
+                        current = zoom_path
+                        print(f"[{job_id}] Zoom aplicado en momentos: {valid_moments}")
+                    else:
+                        print(f"[{job_id}] Zoom overlay fallo: {res['error'][:200]}")
 
         # ── 5. Color grade ──
         grades = {
