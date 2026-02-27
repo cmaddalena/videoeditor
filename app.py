@@ -283,7 +283,7 @@ def _do_process_reel(job_id: str, cfg: dict):
 
         # ── 1. Descargar video ──
         if not download_file(cfg["video_url"], raw_path, job_id):
-            return jsonify({"error": "No pude descargar el video"}), 400
+            raise Exception("No pude descargar el video")
 
         # ── 2. Cortar clip ──
         print(f"[{job_id}] Cortando {clip_start}s -> {clip_end}s")
@@ -291,7 +291,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                        "-ss", str(clip_start), "-to", str(clip_end),
                        "-c", "copy", clip_path], job_id)
         if not res["success"]:
-            return jsonify({"error": "Error cortando clip", "detail": res["error"]}), 500
+            raise Exception("Error cortando clip")
         try: os.remove(raw_path)
         except: pass
 
@@ -318,7 +318,7 @@ def _do_process_reel(job_id: str, cfg: dict):
                        "-c:v", "libx264", "-preset", "fast", "-crf", "22",
                        vertical_path], job_id)
         if not res["success"]:
-            return jsonify({"error": "Error verticalizando", "detail": res["error"]}), 500
+            raise Exception("Error verticalizando")
         try: os.remove(clip_path)
         except: pass
 
@@ -455,7 +455,7 @@ def _do_process_reel(job_id: str, cfg: dict):
             subbed_path
         ], job_id)
         if not res["success"]:
-            return jsonify({"error": "Error en render final", "detail": res["error"]}), 500
+            raise Exception("Error en render final")
 
         after_subs = subbed_path
 
@@ -518,7 +518,7 @@ def _do_process_reel(job_id: str, cfg: dict):
         output_size_mb = round(os.path.getsize(output_path) / 1024 / 1024, 1)
         print(f"[{job_id}] LISTO -> {output_size_mb}MB")
 
-        return jsonify({
+        return {
             "success":         True,
             "job_id":          job_id,
             "output_url":      f"/download/{job_id}",
@@ -526,11 +526,11 @@ def _do_process_reel(job_id: str, cfg: dict):
             "output_size_mb":  output_size_mb,
             "subtitles_words": len(adjusted),
             "brolls_applied":  len(broll_inputs)
-        })
+        }
 
     except Exception as e:
         traceback.print_exc()
-        return jsonify({"error": str(e)}), 500
+        raise
 
 
 
