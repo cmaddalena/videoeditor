@@ -229,6 +229,38 @@ def upload_audio():
     f.save(path)
     return jsonify({"job_id": job_id, "audio_url": f"/download-audio/{job_id}"})
 
+@app.route("/music/list", methods=["GET"])
+def music_list():
+    """List all MP3s in the /music folder next to app.py"""
+    import glob
+    music_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music")
+    if not os.path.exists(music_dir):
+        return jsonify({"tracks": []})
+    files = sorted(glob.glob(os.path.join(music_dir, "*.mp3")))
+    tracks = []
+    for f in files:
+        name = os.path.basename(f)
+        # Try to make a pretty label from filename
+        label = os.path.splitext(name)[0].replace("-", " ").replace("_", " ").title()
+        tracks.append({
+            "filename": name,
+            "label": label,
+            "url": f"/music/{name}"
+        })
+    return jsonify({"tracks": tracks})
+
+@app.route("/music/<filename>", methods=["GET"])
+def serve_music(filename):
+    """Serve an MP3 from the /music folder"""
+    from werkzeug.utils import secure_filename as sf
+    music_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "music")
+    safe = sf(filename)
+    path = os.path.join(music_dir, safe)
+    if not os.path.exists(path) or not safe.endswith(".mp3"):
+        return jsonify({"error": "Not found"}), 404
+    return send_file(path, mimetype="audio/mpeg", conditional=True)
+
+
 @app.route("/compress-audio", methods=["POST"])
 def compress_audio():
     if not check_auth(request):

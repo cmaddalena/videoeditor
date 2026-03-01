@@ -250,7 +250,7 @@ h2 em{font-style:normal;color:var(--accent);}
   <div class="sec-label">Música de fondo</div>
   <div class="music-box">
     <h4>🎵 Música de fondo</h4>
-    <p class="mdesc">// Libre de derechos · mezclada suave debajo de tu voz · o subí tu propio MP3</p>
+    <p class="mdesc">// Próximamente Freesound · por ahora subí tu propio MP3 o elegí un género</p>
     <div class="music-grid" id="musicGrid"></div>
     <div style="margin-bottom:14px">
       <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px">O subí tu propio MP3</div>
@@ -687,43 +687,34 @@ function handleBrollUpload(idx, input) {
 }
 
 // ── Music ──
-// Hardcoded free tracks from ccmixter + freemusicarchive (direct MP3 links, CC licensed)
-const MUSIC_TRACKS = [
-  {
-    label:'Motivacional', tags:'energético · upbeat', emoji:'⚡',
-    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Motivate.mp3'
-  },
-  {
-    label:'Corporativo', tags:'profesional · limpio', emoji:'💼',
-    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Impact%20Moderato.mp3'
-  },
-  {
-    label:'Cinematográfico', tags:'épico · dramático', emoji:'🎬',
-    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cylinder%20Five.mp3'
-  },
-  {
-    label:'Lo-Fi / Chill', tags:'relajado · suave', emoji:'🌙',
-    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Comfortable%20Mystery%205.mp3'
-  },
-  {
-    label:'Hip-Hop / Trap', tags:'urbano · rythmico', emoji:'🎤',
-    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hip%20Hop%20Christmas.mp3'
-  },
-];
-
-function fetchMusicOptions() {
-  // No API call needed — tracks are hardcoded
-  state.musicOptions = MUSIC_TRACKS.map(t => ({...t}));
-  renderMusicGrid();
+async function fetchMusicOptions() {
+  const grid = document.getElementById('musicGrid');
+  try {
+    const d = await apiFetch('/music/list');
+    state.musicOptions = d.tracks || [];
+    if (!state.musicOptions.length) {
+      grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">No hay tracks en /music/ — subí un MP3 abajo</div>';
+      return;
+    }
+    renderMusicGrid();
+  } catch(e) {
+    grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">Error cargando tracks — subí tu MP3 abajo</div>';
+  }
 }
 
 function renderMusicGrid() {
+  const emojis = {'motivacional':'⚡','corporate':'💼','corporativo':'💼','epic':'🎬','epico':'🎬','lofi':'🌙','lo-fi':'🌙','chill':'🌙','hiphop':'🎤','hip-hop':'🎤','trap':'🎤','acoustic':'🎸','acustico':'🎸','electronic':'🔊','electronico':'🔊'};
+  function getEmoji(label) {
+    const l = label.toLowerCase();
+    for (const [k,v] of Object.entries(emojis)) if (l.includes(k)) return v;
+    return '🎵';
+  }
   document.getElementById('musicGrid').innerHTML = state.musicOptions.map((m,i) => `
-    <div class="music-item ${state.music?.label===m.label?'sel':''}" id="mi${i}" onclick="selectMusic(${i})">
+    <div class="music-item ${state.music?.url===API+m.url?'sel':''}" id="mi${i}" onclick="selectMusic(${i})">
       <div class="mdot"></div>
       <div style="flex:1">
-        <div class="mname">${m.emoji} ${m.label}</div>
-        <div class="mtags">${m.tags}</div>
+        <div class="mname">${getEmoji(m.label)} ${m.label}</div>
+        <div class="mtags">${m.filename}</div>
       </div>
       <button class="btn btn-ghost btn-sm" onclick="prevMusic(event,${i})" id="pbtn${i}">▶ Preview</button>
     </div>
@@ -732,29 +723,26 @@ function renderMusicGrid() {
 
 function prevMusic(e, idx) {
   e.stopPropagation();
-  // Stop any playing preview
   if (previewAudio) {
     previewAudio.pause(); previewAudio = null;
     document.querySelectorAll('[id^=pbtn]').forEach(b => b.textContent = '▶ Preview');
   }
-  const url = state.musicOptions?.[idx]?.url;
-  if (!url) return;
+  const url = API + state.musicOptions[idx].url;
   previewAudio = new Audio(url);
   previewAudio.volume = state.musicVol;
-  previewAudio.play().catch(err => {
-    console.warn('Preview failed:', err);
-    toast('Preview no disponible para este track','error');
-  });
+  previewAudio.play().catch(() => toast('No se pudo reproducir','error'));
   document.getElementById(`pbtn${idx}`).textContent = '⏸ Stop';
   previewAudio.onended = () => {
-    document.getElementById(`pbtn${idx}`).textContent = '▶ Preview';
+    const btn = document.getElementById(`pbtn${idx}`);
+    if (btn) btn.textContent = '▶ Preview';
     previewAudio = null;
   };
 }
 
 function selectMusic(idx) {
-  state.music = state.musicOptions?.[idx] || null;
-  state.musicUploadFile = null; // clear upload if selecting preset
+  const m = state.musicOptions[idx];
+  state.music = {...m, url: API + m.url};
+  state.musicUploadFile = null;
   document.getElementById('musicUploadName').textContent = '—';
   document.getElementById('btnClearUpload').style.display = 'none';
   document.querySelectorAll('.music-item').forEach((el,i) => el.classList.toggle('sel', i===idx));
@@ -775,16 +763,15 @@ function updMusicVol(el) {
   if (previewAudio) previewAudio.volume = state.musicVol;
 }
 
-// Music file upload
 function handleMusicUpload(input) {
   const file = input.files?.[0];
   if (!file) return;
   state.musicUploadFile = file;
-  state.music = null; // clear preset selection
+  state.music = null;
   document.querySelectorAll('.music-item').forEach(el => el.classList.remove('sel'));
   document.getElementById('musicUploadName').textContent = file.name;
   document.getElementById('btnClearUpload').style.display = 'inline-flex';
-  toast('MP3 listo para usar 🎵', 'success');
+  toast('MP3 listo ✅', 'success');
 }
 function clearMusicUpload() {
   state.musicUploadFile = null;
