@@ -155,6 +155,11 @@ SUBTITLE_BUILDERS = {
 }
 
 
+@app.route("/")
+def index():
+    return send_file("index.html")
+
+
 @app.route("/health", methods=["GET"])
 def health():
     r = subprocess.run(["ffmpeg", "-version"], capture_output=True, text=True)
@@ -235,6 +240,185 @@ def download_audio(job_id):
     if not os.path.exists(path):
         return jsonify({"error": "Audio no encontrado"}), 404
     return send_file(path, mimetype="audio/mpeg", as_attachment=True, download_name=f"audio_{safe}.mp3")
+
+
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    """Recibe audio MP3 y devuelve transcripción via Whisper"""
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return jsonify({"error": "Falta OPENAI_API_KEY en Railway"}), 500
+    if "file" not in request.files:
+        return jsonify({"error": "Falta archivo de audio"}), 400
+    audio_file = request.files["file"]
+    try:
+        import requests as req
+        resp = req.post(
+            "https://api.openai.com/v1/audio/transcriptions",
+            headers={"Authorization": f"Bearer {openai_key}"},
+            files={"file": (audio_file.filename, audio_file.stream, audio_file.mimetype)},
+            data={
+                "model": "whisper-1",
+                "language": "es",
+                "response_format": "verbose_json",
+                "timestamp_granularities[]": ["word", "segment"]
+            },
+            timeout=120
+        )
+        resp.raise_for_status()
+        return jsonify(resp.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    """Recibe transcripción y devuelve análisis GPT (clip, brolls, energy moments)"""
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return jsonify({"error": "Falta OPENAI_API_KEY en Railway"}), 500
+    data = request.get_json()
+    segments = data.get("segments", [])
+    duration = data.get("duration", 0)
+    try:
+        import requests as req
+        resp = req.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Sos editor de video experto en reels virales latinoamericanos. Respondés SOLO con JSON válido sin markdown."},
+                    {"role": "user", "content": f"""Analizá esta transcripción y encontrá el MEJOR clip de 45-60s.
+Reglas:
+- Si dura <90s: clip_start=0, clip_end=duración completa
+- Si dura >90s: elegí el mejor fragmento de 45-60s
+- energy_moments: timestamps de énfasis (máx 3) — NO coincidan con broll_moments
+- broll_moments: 3 momentos donde un b-roll reforzaría visualmente lo dicho — NO coincidan con energy_moments
+Segmentos: {json.dumps(segments)}
+Duración total: {duration}s
+Respondé SOLO este JSON:
+{{"clip_start":0,"clip_end":0,"hook_text":"","broll_moments":[{{"second":0,"keyword":"english keyword"}}],"energy_moments":[{{"second":0}}],"caption":"","hashtags":""}}"""}
+                ]
+            },
+            timeout=60
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"]
+        return jsonify(json.loads(content))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+
+@app.route("/transcribe", methods=["POST"])
+def transcribe():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return jsonify({"error": "Falta OPENAI_API_KEY en Railway"}), 500
+
+    data = request.get_json()
+    audio_url = data.get("audio_url", "")
+    if not audio_url:
+        return jsonify({"error": "Falta audio_url"}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+    audio_path = f"{WORK_DIR}/{job_id}_tr_audio.mp3"
+
+    if not download_file(audio_url, audio_path, job_id):
+        return jsonify({"error": "No pude descargar el audio"}), 400
+
+    try:
+        with open(audio_path, "rb") as af:
+            r = requests.post(
+                "https://api.openai.com/v1/audio/transcriptions",
+                headers={"Authorization": f"Bearer {openai_key}"},
+                files={"file": ("audio.mp3", af, "audio/mpeg")},
+                data={
+                    "model": "whisper-1",
+                    "language": "es",
+                    "response_format": "verbose_json",
+                    "timestamp_granularities[]": ["word", "segment"]
+                },
+                timeout=120
+            )
+        r.raise_for_status()
+        return jsonify(r.json())
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    finally:
+        try: os.remove(audio_path)
+        except: pass
+
+
+@app.route("/analyze", methods=["POST"])
+def analyze():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    openai_key = os.environ.get("OPENAI_API_KEY", "")
+    if not openai_key:
+        return jsonify({"error": "Falta OPENAI_API_KEY en Railway"}), 500
+
+    data = request.get_json()
+    segments = data.get("segments", [])
+    duration = data.get("duration", 0)
+
+    prompt = f"""Analizá esta transcripción y encontrá el MEJOR clip de 45-60s.
+Reglas:
+- Si dura <90s: clip_start=0, clip_end=duración completa
+- Si dura >90s: elegí el mejor fragmento de 45-60s
+- energy_moments: timestamps de énfasis (máx 3) — NO coincidan con broll_moments
+- broll_moments: 3 momentos donde un b-roll reforzaría visualmente lo dicho — NO coincidan con energy_moments
+Segmentos: {json.dumps(segments)}
+Duración total: {duration}s
+Respondé SOLO este JSON:
+{{"clip_start":0,"clip_end":0,"hook_text":"","broll_moments":[{{"second":0,"keyword":"english keyword"}}],"energy_moments":[{{"second":0}}],"caption":"","hashtags":""}}"""
+
+    try:
+        r = requests.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {openai_key}", "Content-Type": "application/json"},
+            json={
+                "model": "gpt-4o-mini",
+                "messages": [
+                    {"role": "system", "content": "Sos editor de video experto en reels virales latinoamericanos. Respondés SOLO con JSON válido sin markdown."},
+                    {"role": "user", "content": prompt}
+                ]
+            },
+            timeout=60
+        )
+        r.raise_for_status()
+        result = r.json()
+        analysis = json.loads(result["choices"][0]["message"]["content"])
+        return jsonify(analysis)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/upload-from-url", methods=["POST"])
+def upload_from_url():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    data = request.get_json()
+    url = data.get("url", "")
+    if not url:
+        return jsonify({"error": "Falta url"}), 400
+    job_id = str(uuid.uuid4())[:8]
+    ext = ".mp4"
+    path = f"{WORK_DIR}/{job_id}_upload{ext}"
+    if not download_file(url, path, job_id):
+        return jsonify({"error": "No pude descargar el video desde la URL"}), 400
+    size_mb = round(os.path.getsize(path) / 1024 / 1024, 1)
+    print(f"[{job_id}] Video desde URL: {size_mb}MB")
+    return jsonify({"success": True, "job_id": job_id, "size_mb": size_mb})
 
 
 @app.route("/process-reel", methods=["POST"])
@@ -344,7 +528,7 @@ def _do_process_reel(job_id: str, cfg: dict):
 
         current = vertical_path
 
-        # ── 4. Zoom en energy_moments via overlay ──
+        # ── 4. Zoom en energy_moments (scale+crop, liviano) ──
         if cfg.get("zoom_enabled", True) and cfg.get("energy_moments"):
             def em_val(m): return float(m["second"] if isinstance(m, dict) else m)
             valid_moments = [em_val(m) - clip_start for m in cfg["energy_moments"][:3]
@@ -352,39 +536,41 @@ def _do_process_reel(job_id: str, cfg: dict):
             if valid_moments:
                 intensity = float(cfg.get("zoom_intensity", 0.08))
                 zoom_dur  = float(cfg.get("zoom_duration_sec", 1.5))
-                sw = int(1080 * (1 + intensity))
-                sh = int(1920 * (1 + intensity))
-                ox = (sw - 1080) // 2
-                oy = (sh - 1920) // 2
-                zoom_scaled = p("zoom_scaled.mp4")
-                res_scale = run_cmd(["ffmpeg", "-y", "-i", current,
-                    "-vf", f"scale={sw}:{sh},crop=1080:1920:{ox}:{oy}",
-                    "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-                    zoom_scaled], job_id)
-                if res_scale["success"]:
-                    inputs_z = ["-i", current, "-i", zoom_scaled]
-                    fc_parts_z = []
-                    last_vz = "[0:v]"
-                    for idx, mt in enumerate(valid_moments):
+                # Construir filtro de zoom por segmentos usando scale+crop
+                zoom_scale = 1.0 + intensity
+                sw = int(1080 * zoom_scale)
+                sh = int(1920 * zoom_scale)
+                zoom_filters = []
+                for mt in valid_moments:
+                    t0 = round(mt, 2)
+                    t1 = round(mt + zoom_dur, 2)
+                    zoom_filters.append(
+                        f"if(between(t,{t0},{t1}),{sw},{int(1080)})"
+                    )
+                # Zoom en todos los energy_moments
+                def make_between(moments, val_zoom, val_normal):
+                    expr = str(val_normal)
+                    for mt in reversed(moments):
                         t0 = round(mt, 2)
                         t1 = round(mt + zoom_dur, 2)
-                        out_label = f"[z{idx}]"
-                        fc_parts_z.append(
-                            f"{last_vz}[1:v]overlay=0:0:enable='between(t,{t0},{t1})'{out_label}"
-                        )
-                        last_vz = out_label
-                    res = run_cmd(["ffmpeg", "-y"] + inputs_z + [
-                        "-filter_complex", ";".join(fc_parts_z),
-                        "-map", last_vz, "-map", "0:a",
-                        "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
-                        "-c:a", "copy", zoom_path], job_id)
-                    try: os.remove(zoom_scaled)
-                    except: pass
-                    if res["success"]:
-                        current = zoom_path
-                        print(f"[{job_id}] Zoom aplicado en momentos: {valid_moments}")
-                    else:
-                        print(f"[{job_id}] Zoom overlay fallo: {res['error'][:200]}")
+                        expr = f"if(between(t,{t0},{t1}),{val_zoom},{expr})"
+                    return expr
+
+                w_expr = make_between(valid_moments, sw, 1080)
+                h_expr = make_between(valid_moments, sh, 1920)
+                vf_zoom = (
+                    f"scale=w='{w_expr}':h='{h_expr}',"
+                    f"crop=1080:1920:(iw-1080)/2:(ih-1920)/2"
+                )
+                res = run_cmd(["ffmpeg", "-y", "-i", current,
+                               "-vf", vf_zoom,
+                               "-c:a", "copy", "-c:v", "libx264", "-preset", "ultrafast", "-crf", "28",
+                               zoom_path], job_id)
+                if res["success"]:
+                    current = zoom_path
+                    print(f"[{job_id}] Zoom aplicado en {valid_moments[0]:.1f}s")
+                else:
+                    print(f"[{job_id}] Zoom fallo, continuando sin zoom")
 
         # ── 5. Color grade ──
         grades = {
