@@ -325,16 +325,28 @@ def analyze():
     segments = data.get("segments", [])
     duration = data.get("duration", 0)
 
-    prompt = f"""Analizá esta transcripción y encontrá el MEJOR clip de 45-60s.
-Reglas:
-- Si dura <90s: clip_start=0, clip_end=duración completa
-- Si dura >90s: elegí el mejor fragmento de 45-60s
-- energy_moments: timestamps de énfasis (máx 3) — NO coincidan con broll_moments
-- broll_moments: 3 momentos donde un b-roll reforzaría visualmente lo dicho — NO coincidan con energy_moments
+    prompt = f"""Sos un editor de video experto en reels virales. Analizá la transcripción y encontrá el MEJOR clip de 45-60s.
+
+Reglas de corte:
+- Si el video dura menos de 90s: clip_start=0, clip_end=duración total
+- Si dura más de 90s: elegí el fragmento más enganchador de 45-60s
+
+Reglas para broll_moments (MUY IMPORTANTE):
+- Elegí 3 momentos donde mostrar un video de fondo reforzaría visualmente lo que se dice
+- La keyword debe ser EN INGLÉS y describir una ESCENA VISUAL CONCRETA que se puede filmar
+- Pensá en términos de stock footage: qué imagen genérica existe en Pixabay que ilustra esa idea
+- BUENAS keywords: "person typing laptop", "city traffic aerial", "handshake business", "smartphone screen scrolling", "money coins falling", "team meeting office", "graph growing"
+- MALAS keywords: conceptos abstractos, nombres propios, marcas, situaciones muy específicas
+- Si alguien habla de "responder mensajes": usa "smartphone notifications messages"
+- Si habla de "ganar clientes": usa "business handshake deal"
+- Si habla de "automatización": usa "robot factory automation" o "computer code screen"
+- energy_moments: timestamps donde hay énfasis vocal (máx 3) — NO deben coincidir con broll_moments
+
 Segmentos: {json.dumps(segments)}
 Duración total: {duration}s
-Respondé SOLO este JSON sin markdown:
-{{"clip_start":0,"clip_end":0,"hook_text":"","broll_moments":[{{"second":0,"keyword":"english keyword"}}],"energy_moments":[{{"second":0}}],"caption":"","hashtags":""}}"""
+
+Respondé SOLO este JSON válido sin markdown ni texto extra:
+{{"clip_start":0,"clip_end":0,"hook_text":"","broll_moments":[{{"second":0,"keyword":"descriptive english scene"}}],"energy_moments":[{{"second":0}}],"caption":"","hashtags":""}}"""
 
     try:
         r = requests.post(
@@ -506,13 +518,18 @@ def _do_process_reel(job_id: str, cfg: dict):
                     print(f"[{job_id}] Zoom overlay fallo: {res['error'][:200]}")
 
     # ── 5. Color grade ──
-    grades = {
-        "energetic":    "eq=contrast=1.15:saturation=1.3:brightness=0.02:gamma=0.95",
-        "professional": "eq=contrast=1.05:saturation=0.85:brightness=0.0",
-        "calm":         "eq=contrast=1.0:saturation=1.1:brightness=0.01",
-    }
-    vf_grade = grades.get(cfg.get("color_grade", "energetic"))
-    vignette  = cfg.get("vignette_enabled", False)
+    # Usar color_grade_filter custom (de sliders UI) o preset por nombre
+    custom_filter = cfg.get("color_grade_filter", "")
+    if custom_filter:
+        vf_grade = custom_filter
+    else:
+        grades = {
+            "energetic":    "eq=contrast=1.15:saturation=1.3:brightness=0.02:gamma=0.95",
+            "professional": "eq=contrast=1.05:saturation=0.85:brightness=0.0",
+            "calm":         "eq=contrast=1.0:saturation=1.1:brightness=0.01",
+        }
+        vf_grade = grades.get(cfg.get("color_grade", "energetic"))
+    vignette = cfg.get("vignette_enabled", False)
     if vf_grade or vignette:
         filters = []
         if vf_grade: filters.append(vf_grade)
@@ -633,7 +650,32 @@ def _do_process_reel(job_id: str, cfg: dict):
 
     after_subs = subbed_path
 
-    # Paso C: logo
+    # Paso C: música de fondo
+    music_url = cfg.get("music_url", "")
+    music_vol = float(cfg.get("music_volume", 0.15))
+    if music_url and music_vol > 0:
+        music_raw = p("music_raw.mp3")
+        music_out = p("music.mp4")
+        if download_file(music_url, music_raw, job_id):
+            res_m = run_cmd([
+                "ffmpeg", "-y",
+                "-i", after_subs,
+                "-stream_loop", "-1", "-i", music_raw,
+                "-filter_complex",
+                f"[1:a]volume={music_vol}[music];[0:a][music]amix=inputs=2:duration=first:weights=1 {music_vol}[aout]",
+                "-map", "0:v", "-map", "[aout]",
+                "-c:v", "copy", "-c:a", "aac", "-b:a", "192k",
+                "-shortest", music_out
+            ], job_id)
+            try: os.remove(music_raw)
+            except: pass
+            if res_m["success"]:
+                after_subs = music_out
+                print(f"[{job_id}] Música mezclada OK (vol={music_vol})")
+            else:
+                print(f"[{job_id}] Música fallo, continuando sin música")
+
+    # Paso D: logo
     if has_logo:
         logo_out = p("logoed.mp4")
         pos_map  = {"top-right": "W-w-40:40", "top-left": "40:40",

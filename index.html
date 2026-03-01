@@ -5,24 +5,16 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Reels Engine</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/wavesurfer.js/7.8.7/wavesurfer.min.js"></script>
 <style>
 :root {
-  --bg: #080808;
-  --surface: #111;
-  --surface2: #1a1a1a;
-  --border: #222;
-  --accent: #e8ff47;
-  --accent2: #ff4757;
-  --text: #f0f0f0;
-  --muted: #555;
-  --success: #47ffb2;
-  --sans: 'Syne', sans-serif;
-  --mono: 'DM Mono', monospace;
+  --bg: #080808; --surface: #111; --surface2: #1a1a1a; --border: #222;
+  --accent: #e8ff47; --accent2: #ff4757; --text: #f0f0f0; --muted: #555;
+  --success: #47ffb2; --sans: 'Syne', sans-serif; --mono: 'DM Mono', monospace;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { background: var(--bg); color: var(--text); font-family: var(--sans); min-height: 100vh; }
 
-/* HEADER */
 header {
   display: flex; align-items: center; justify-content: space-between;
   padding: 18px 40px; border-bottom: 1px solid var(--border);
@@ -31,35 +23,25 @@ header {
 .logo { font-size: 17px; font-weight: 800; letter-spacing: -0.5px; }
 .logo span { color: var(--accent); }
 .steps { display: flex; align-items: center; gap: 6px; }
-.dot {
-  width: 7px; height: 7px; border-radius: 50%; background: var(--border);
-  transition: all 0.3s;
-}
+.dot { width: 7px; height: 7px; border-radius: 50%; background: var(--border); transition: all 0.3s; }
 .dot.active { background: var(--accent); transform: scale(1.5); }
 .dot.done { background: var(--success); }
 .step-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
-/* MAIN */
 main { max-width: 860px; margin: 0 auto; padding: 56px 40px; }
 .panel { display: none; animation: fadeUp 0.35s ease; }
 .panel.active { display: block; }
-@keyframes fadeUp {
-  from { opacity: 0; transform: translateY(16px); }
-  to { opacity: 1; transform: translateY(0); }
-}
+@keyframes fadeUp { from { opacity: 0; transform: translateY(16px); } to { opacity: 1; transform: translateY(0); } }
 
-/* TYPOGRAPHY */
 h1 { font-size: 56px; font-weight: 800; line-height: 1; letter-spacing: -2.5px; margin-bottom: 10px; }
 h1 em { font-style: normal; color: var(--accent); }
 h2 { font-size: 30px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
 h2 em { font-style: normal; color: var(--accent); }
 .sub { font-family: var(--mono); font-size: 13px; color: var(--muted); margin-bottom: 48px; }
 
-/* UPLOAD ZONE */
 .drop-zone {
   border: 2px dashed var(--border); border-radius: 14px; padding: 72px 40px;
-  text-align: center; cursor: pointer; transition: all 0.25s;
-  background: var(--surface); position: relative;
+  text-align: center; cursor: pointer; transition: all 0.25s; background: var(--surface); position: relative;
 }
 .drop-zone:hover, .drop-zone.over { border-color: var(--accent); background: rgba(232,255,71,0.03); }
 .drop-zone input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
@@ -67,186 +49,164 @@ h2 em { font-style: normal; color: var(--accent); }
 .drop-zone h3 { font-size: 18px; font-weight: 700; margin-bottom: 6px; }
 .drop-zone p { color: var(--muted); font-size: 13px; font-family: var(--mono); }
 
-/* FILE INFO */
 .file-row {
-  display: flex; align-items: center; gap: 14px;
-  padding: 14px 18px; background: var(--surface); border: 1px solid var(--border);
-  border-radius: 10px; margin-top: 14px;
+  display: flex; align-items: center; gap: 14px; padding: 14px 18px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px; margin-top: 14px;
 }
 .file-icon { font-size: 26px; }
 .file-name { font-weight: 700; font-size: 13px; }
 .file-size { font-family: var(--mono); font-size: 11px; color: var(--muted); }
 
-/* PROGRESS */
 .prog-wrap { background: var(--surface2); border-radius: 100px; height: 3px; overflow: hidden; margin: 10px 0; }
 .prog-bar { height: 100%; background: var(--accent); border-radius: 100px; transition: width 0.5s ease; width: 0%; }
 .prog-label { font-family: var(--mono); font-size: 12px; color: var(--muted); }
 
-/* BUTTONS */
 .btn {
-  display: inline-flex; align-items: center; gap: 7px;
-  padding: 12px 24px; border-radius: 9px; font-family: var(--sans);
-  font-weight: 700; font-size: 14px; cursor: pointer; border: none; transition: all 0.2s;
-  text-decoration: none;
+  display: inline-flex; align-items: center; gap: 7px; padding: 12px 24px; border-radius: 9px;
+  font-family: var(--sans); font-weight: 700; font-size: 14px; cursor: pointer;
+  border: none; transition: all 0.2s; text-decoration: none;
 }
 .btn-primary { background: var(--accent); color: #000; }
-.btn-primary:hover { background: #d4eb3a; transform: translateY(-1px); }
+.btn-primary:hover:not(:disabled) { background: #d4eb3a; transform: translateY(-1px); }
 .btn-ghost { background: transparent; color: var(--text); border: 1px solid var(--border); }
-.btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+.btn-ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .btn-sm { padding: 7px 14px; font-size: 12px; }
-.btn:disabled { opacity: 0.35; cursor: not-allowed; transform: none !important; }
+.btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none !important; pointer-events: none; }
 
-/* ACTIONS */
 .actions {
   display: flex; justify-content: space-between; align-items: center;
   margin-top: 40px; padding-top: 22px; border-top: 1px solid var(--border);
 }
 
-/* CHIPS */
 .chips { display: flex; gap: 7px; flex-wrap: wrap; margin-bottom: 22px; }
-.chip {
-  font-family: var(--mono); font-size: 11px; padding: 4px 10px;
-  background: var(--surface2); border-radius: 100px; border: 1px solid var(--border); color: var(--muted);
-}
+.chip { font-family: var(--mono); font-size: 11px; padding: 4px 10px; background: var(--surface2); border-radius: 100px; border: 1px solid var(--border); color: var(--muted); }
 .chip.y { border-color: var(--accent); color: var(--accent); }
 .chip.g { border-color: var(--success); color: var(--success); }
 
-/* SECTION LABEL */
 .sec-label {
-  font-family: var(--mono); font-size: 10px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 1px; margin-bottom: 14px;
-  display: flex; align-items: center; gap: 10px;
+  font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: 1px; margin-bottom: 14px; display: flex; align-items: center; gap: 10px;
 }
 .sec-label::after { content: ''; flex: 1; height: 1px; background: var(--border); }
 
-/* TRANSCRIPT */
 .transcript-box {
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  padding: 22px; min-height: 260px; font-family: var(--mono); font-size: 14px;
-  line-height: 1.9; color: var(--text); outline: none; resize: vertical;
-  width: 100%; cursor: text;
+  padding: 22px; min-height: 200px; font-family: var(--mono); font-size: 14px;
+  line-height: 1.9; color: var(--text); outline: none; resize: vertical; width: 100%; cursor: text;
 }
 .transcript-box:focus { border-color: var(--accent); }
 .transcript-toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
-.badge {
-  font-family: var(--mono); font-size: 11px; padding: 3px 9px;
-  background: var(--surface2); border-radius: 100px; color: var(--muted); border: 1px solid var(--border);
-}
+.badge { font-family: var(--mono); font-size: 11px; padding: 3px 9px; background: var(--surface2); border-radius: 100px; color: var(--muted); border: 1px solid var(--border); }
 
 /* STYLE CARDS */
-.style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 32px; }
-.style-card {
-  background: var(--surface); border: 2px solid var(--border); border-radius: 12px;
-  padding: 18px; cursor: pointer; text-align: center; transition: all 0.2s;
-}
+.style-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 10px; margin-bottom: 24px; }
+.style-card { background: var(--surface); border: 2px solid var(--border); border-radius: 12px; padding: 18px; cursor: pointer; text-align: center; transition: all 0.2s; }
 .style-card:hover { border-color: var(--muted); }
 .style-card.sel { border-color: var(--accent); background: rgba(232,255,71,0.04); }
-.style-preview {
-  font-size: 10px; font-weight: 700; padding: 7px 10px; border-radius: 5px;
-  margin-bottom: 9px; background: #000; display: inline-block;
-}
+.style-preview { font-size: 10px; font-weight: 700; padding: 7px 10px; border-radius: 5px; margin-bottom: 9px; background: #000; display: inline-block; }
 .style-name { font-size: 13px; font-weight: 700; margin-bottom: 3px; }
 .style-desc { font-size: 10px; color: var(--muted); font-family: var(--mono); }
 
-/* BROLL CARDS */
-.broll-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 28px; }
-.broll-card {
+/* COLOR CONTROLS */
+.color-controls {
   background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
-  padding: 18px; display: grid; grid-template-columns: 130px 1fr; gap: 18px; align-items: start;
+  padding: 20px; margin-bottom: 24px;
 }
+.ctrl-row { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
+.ctrl-row:last-child { margin-bottom: 0; }
+.ctrl-label { font-family: var(--mono); font-size: 11px; color: var(--muted); width: 80px; flex-shrink: 0; }
+.ctrl-slider { flex: 1; -webkit-appearance: none; height: 3px; border-radius: 3px; background: var(--border); outline: none; }
+.ctrl-slider::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; }
+.ctrl-val { font-family: var(--mono); font-size: 11px; color: var(--accent); width: 36px; text-align: right; }
+
+/* BROLL CARDS */
+.broll-list { display: flex; flex-direction: column; gap: 14px; margin-bottom: 12px; }
+.broll-card { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
+.broll-top { display: grid; grid-template-columns: 130px 1fr; gap: 18px; align-items: start; margin-bottom: 14px; }
 .broll-thumb {
   width: 130px; height: 76px; background: var(--surface2); border-radius: 8px;
-  overflow: hidden; position: relative; flex-shrink: 0;
+  overflow: hidden; position: relative; flex-shrink: 0; cursor: pointer;
 }
 .broll-thumb video { width: 100%; height: 100%; object-fit: cover; }
 .broll-thumb .play-ov {
   position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  background: rgba(0,0,0,0.45); font-size: 20px; cursor: pointer; transition: opacity 0.2s;
+  background: rgba(0,0,0,0.5); font-size: 20px; transition: opacity 0.2s;
 }
 .broll-thumb:hover .play-ov { opacity: 0; }
 .broll-kw { font-weight: 700; font-size: 14px; margin-bottom: 8px; display: flex; align-items: center; gap: 7px; }
 .tag { font-family: var(--mono); font-size: 10px; background: rgba(232,255,71,0.12); color: var(--accent); padding: 2px 7px; border-radius: 100px; }
 .broll-timing { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
-.time-in {
-  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 9px; color: var(--text); font-family: var(--mono); font-size: 12px;
-  width: 65px; text-align: center;
-}
+.time-in { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 9px; color: var(--text); font-family: var(--mono); font-size: 12px; width: 65px; text-align: center; }
 .time-in:focus { outline: none; border-color: var(--accent); }
 .regen-row { display: flex; gap: 7px; }
-.regen-in {
-  background: var(--surface2); border: 1px solid var(--border); border-radius: 6px;
-  padding: 5px 10px; color: var(--text); font-family: var(--mono); font-size: 11px; flex: 1;
-}
+.regen-in { background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px; color: var(--text); font-family: var(--mono); font-size: 11px; flex: 1; }
 .regen-in:focus { outline: none; border-color: var(--accent); }
 
-/* VIDEO RESULT */
-.video-wrap {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
-  overflow: hidden; margin-bottom: 22px;
+/* WAVEFORM */
+.waveform-wrap {
+  background: var(--surface2); border-radius: 8px; padding: 12px;
+  position: relative; overflow: hidden;
 }
+.waveform-wrap wave { border-radius: 6px; }
+.broll-markers { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+.broll-marker {
+  position: absolute; top: 0; height: 100%;
+  background: rgba(232,255,71,0.18); border-left: 2px solid var(--accent);
+  border-right: 2px solid var(--accent); border-radius: 2px;
+}
+.broll-marker-label {
+  position: absolute; top: 4px; left: 4px; font-family: var(--mono);
+  font-size: 9px; color: var(--accent); white-space: nowrap;
+}
+
+/* MUSIC */
+.music-section { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 24px; }
+.music-section h4 { font-size: 14px; font-weight: 700; margin-bottom: 4px; }
+.music-section p { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+.music-grid { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.music-item {
+  display: flex; align-items: center; gap: 12px; padding: 10px 14px;
+  background: var(--surface2); border-radius: 8px; border: 1px solid var(--border);
+  cursor: pointer; transition: all 0.2s;
+}
+.music-item:hover { border-color: var(--accent); }
+.music-item.sel { border-color: var(--accent); background: rgba(232,255,71,0.06); }
+.music-item.sel .music-dot { background: var(--accent); }
+.music-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); flex-shrink: 0; }
+.music-name { font-size: 13px; font-weight: 700; flex: 1; }
+.music-tags { font-family: var(--mono); font-size: 10px; color: var(--muted); }
+.vol-row { display: flex; align-items: center; gap: 12px; }
+.vol-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+/* VIDEO RESULT */
+.video-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; overflow: hidden; margin-bottom: 22px; }
 .video-wrap video { width: 100%; max-height: 480px; display: block; background: #000; }
 .video-meta { padding: 18px; display: flex; gap: 24px; flex-wrap: wrap; }
 .meta-item { display: flex; flex-direction: column; gap: 3px; }
 .meta-lbl { font-family: var(--mono); font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
 .meta-val { font-weight: 700; font-size: 16px; }
 
-/* REGEN BOX */
-.regen-box {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px;
-}
+.regen-box { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 22px; }
 .regen-box h3 { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
-.regen-box textarea {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 11px; color: var(--text); font-family: var(--mono); font-size: 12px;
-  resize: vertical; min-height: 72px; margin-bottom: 10px;
-}
+.regen-box textarea { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 11px; color: var(--text); font-family: var(--mono); font-size: 12px; resize: vertical; min-height: 72px; margin-bottom: 10px; }
 .regen-box textarea:focus { outline: none; border-color: var(--accent); }
 
-/* TOAST */
-.toast {
-  position: fixed; bottom: 28px; right: 28px;
-  background: var(--surface2); border: 1px solid var(--border);
-  border-radius: 9px; padding: 12px 18px; font-family: var(--mono); font-size: 12px;
-  z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s;
-}
+.toast { position: fixed; bottom: 28px; right: 28px; background: var(--surface2); border: 1px solid var(--border); border-radius: 9px; padding: 12px 18px; font-family: var(--mono); font-size: 12px; z-index: 999; transform: translateY(80px); opacity: 0; transition: all 0.3s; }
 .toast.show { transform: translateY(0); opacity: 1; }
 .toast.success { border-color: var(--success); color: var(--success); }
 .toast.error { border-color: var(--accent2); color: var(--accent2); }
 
-/* SPINNER */
-.spin {
-  width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.15);
-  border-top-color: currentColor; border-radius: 50%; animation: rot 0.7s linear infinite; display: inline-block;
-}
+.spin { width: 16px; height: 16px; border: 2px solid rgba(255,255,255,0.15); border-top-color: currentColor; border-radius: 50%; animation: rot 0.7s linear infinite; display: inline-block; }
 @keyframes rot { to { transform: rotate(360deg); } }
 
-/* CONFIG MODAL */
-.overlay {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-  display: flex; align-items: center; justify-content: center; z-index: 200;
-}
-.modal {
-  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
-  padding: 36px; width: 440px; max-width: 90vw;
-}
-.modal h3 { font-size: 20px; font-weight: 800; margin-bottom: 6px; }
-.modal p { font-family: var(--mono); font-size: 12px; color: var(--muted); margin-bottom: 24px; }
-.field-label { font-family: var(--mono); font-size: 11px; color: var(--muted); margin-bottom: 6px; display: block; }
-.field-in {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; color: var(--text); font-family: var(--mono); font-size: 13px; margin-bottom: 16px;
-}
+.field-in { width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px; padding: 10px 14px; color: var(--text); font-family: var(--mono); font-size: 13px; }
 .field-in:focus { outline: none; border-color: var(--accent); }
-.field-in {
-  width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 8px;
-  padding: 10px 14px; color: var(--text); font-family: var(--mono); font-size: 13px;
-}
+
+/* Processing overlay in step 4 */
+.processing-state { opacity: 0.4; pointer-events: none; }
 </style>
 </head>
 <body>
-
-
 
 <header>
   <div class="logo">Reels<span>Engine</span></div>
@@ -278,9 +238,8 @@ h2 em { font-style: normal; color: var(--accent); }
     <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">o pegá un link de Drive</span>
     <div style="flex:1;height:1px;background:var(--border)"></div>
   </div>
-
   <div style="display:flex;gap:10px;margin-top:16px">
-    <input type="text" id="driveUrl" class="field-in" placeholder="https://drive.google.com/file/d/..." style="margin-bottom:0;flex:1">
+    <input type="text" id="driveUrl" class="field-in" placeholder="https://drive.google.com/file/d/..." style="flex:1">
     <button class="btn btn-ghost" onclick="useDriveUrl()">Usar link →</button>
   </div>
 
@@ -304,10 +263,10 @@ h2 em { font-style: normal; color: var(--accent); }
   </div>
 </div>
 
-<!-- ════ PASO 2: TRANSCRIPT ════ -->
+<!-- ════ PASO 2: TRANSCRIPT + ESTILOS + COLORES ════ -->
 <div class="panel" id="p1">
   <h2>Revisá la <em>transcripción</em></h2>
-  <p class="sub">// El subrayado rojo es revisión ortográfica del browser — editá libremente</p>
+  <p class="sub">// Editá palabras si hace falta — el subrayado rojo es el corrector del browser</p>
 
   <div class="chips" id="trChips"></div>
 
@@ -320,12 +279,12 @@ h2 em { font-style: normal; color: var(--accent); }
   <div class="sec-label">Clip seleccionado por IA</div>
   <div class="transcript-box" id="trEditor" contenteditable="true" spellcheck="true" lang="es"></div>
 
-  <div class="sec-label" style="margin-top:32px">Estilo de subtítulos</div>
+  <div class="sec-label" style="margin-top:28px">Estilo de subtítulos</div>
   <div class="style-grid">
     <div class="style-card sel" onclick="selStyle('word_highlight',this)">
       <div class="style-preview" style="color:#00ffff">palabra <span style="color:#fff">por</span> palabra</div>
       <div class="style-name">Word Highlight</div>
-      <div class="style-desc">Resalta la palabra activa en cyan</div>
+      <div class="style-desc">Resalta la palabra activa</div>
     </div>
     <div class="style-card" onclick="selStyle('line',this)">
       <div class="style-preview" style="color:#fff">línea completa</div>
@@ -339,18 +298,66 @@ h2 em { font-style: normal; color: var(--accent); }
     </div>
   </div>
 
+  <div class="sec-label">Ajustes de imagen</div>
+  <div class="color-controls">
+    <div class="ctrl-row">
+      <span class="ctrl-label">Brillo</span>
+      <input type="range" class="ctrl-slider" id="slBrightness" min="-0.15" max="0.15" step="0.01" value="0.02" oninput="updCtrl('brightness',this)">
+      <span class="ctrl-val" id="vBrightness">+0.02</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Contraste</span>
+      <input type="range" class="ctrl-slider" id="slContrast" min="0.8" max="1.5" step="0.05" value="1.15" oninput="updCtrl('contrast',this)">
+      <span class="ctrl-val" id="vContrast">1.15</span>
+    </div>
+    <div class="ctrl-row">
+      <span class="ctrl-label">Saturación</span>
+      <input type="range" class="ctrl-slider" id="slSaturation" min="0.5" max="2.0" step="0.05" value="1.3" oninput="updCtrl('saturation',this)">
+      <span class="ctrl-val" id="vSaturation">1.30</span>
+    </div>
+  </div>
+
   <div class="actions">
     <button class="btn btn-ghost" onclick="go(0)">← Volver</button>
     <button class="btn btn-primary" onclick="go(2)">Ver B-Rolls →</button>
   </div>
 </div>
 
-<!-- ════ PASO 3: B-ROLLS ════ -->
+<!-- ════ PASO 3: B-ROLLS + WAVEFORM + MÚSICA ════ -->
 <div class="panel" id="p2">
   <h2>Editá los <em>B-Rolls</em></h2>
-  <p class="sub">// Ajustá el timing o pedí otro video para cada momento</p>
+  <p class="sub">// Visualizá el audio y arrastrá el timing de cada b-roll</p>
+
+  <!-- Waveform global -->
+  <div class="sec-label">Onda de audio — posición de cada b-roll</div>
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:24px">
+    <div id="waveform" style="position:relative">
+      <div id="waveformEl"></div>
+      <div id="brollMarkers" class="broll-markers"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;margin-top:6px">
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)" id="waveStart">0s</span>
+      <span style="font-family:var(--mono);font-size:10px;color:var(--muted)" id="waveEnd">—</span>
+    </div>
+  </div>
 
   <div class="broll-list" id="brollList"></div>
+
+  <!-- Música -->
+  <div class="sec-label">Música de fondo</div>
+  <div class="music-section">
+    <h4>🎵 Música de fondo</h4>
+    <p>// Pixabay Music · libre de derechos · se mezcla debajo de tu voz</p>
+    <div class="music-grid" id="musicGrid">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--muted)">Cargando opciones...</div>
+    </div>
+    <div class="vol-row">
+      <span class="vol-label">Volumen música:</span>
+      <input type="range" class="ctrl-slider" id="slMusicVol" min="0" max="0.5" step="0.05" value="0.15" oninput="updMusicVol(this)" style="flex:1;max-width:200px">
+      <span class="ctrl-val" id="vMusicVol">15%</span>
+      <button class="btn btn-ghost btn-sm" onclick="clearMusic()" style="margin-left:8px">Sin música</button>
+    </div>
+  </div>
 
   <div class="actions">
     <button class="btn btn-ghost" onclick="go(1)">← Volver</button>
@@ -361,11 +368,11 @@ h2 em { font-style: normal; color: var(--accent); }
 <!-- ════ PASO 4: RESULTADO ════ -->
 <div class="panel" id="p3">
   <h2>Tu <em>Reel</em> está listo</h2>
-  <p class="sub">// Descargalo o pedile ajustes a la IA</p>
+  <p class="sub" id="p3Sub">// Procesando tu video...</p>
 
   <div id="renderProg" style="margin-bottom:28px">
-    <div class="prog-label" id="renderLbl">Procesando...</div>
-    <div class="prog-wrap"><div class="prog-bar" id="renderBar" style="width:8%"></div></div>
+    <div class="prog-label" id="renderLbl">Enviando...</div>
+    <div class="prog-wrap"><div class="prog-bar" id="renderBar" style="width:5%"></div></div>
   </div>
 
   <div class="video-wrap" id="videoWrap" style="display:none">
@@ -373,12 +380,12 @@ h2 em { font-style: normal; color: var(--accent); }
     <div class="video-meta" id="videoMeta"></div>
   </div>
 
-  <div class="regen-box">
+  <div class="regen-box" id="regenBox" style="opacity:0.35;pointer-events:none">
     <h3>¿Querés ajustar algo?</h3>
-    <textarea id="regenTxt" placeholder="Ej: agrandá las letras, cambiá el clip del segundo 10, menos zoom, otros colores..."></textarea>
+    <textarea id="regenTxt" placeholder="Ej: agrandá las letras, cambiá el clip del segundo 10, menos zoom, otros colores..." disabled></textarea>
     <div style="display:flex;gap:10px;flex-wrap:wrap">
-      <button class="btn btn-ghost" id="btnRegen" onclick="regenerate()">🔄 Regenerar con cambios</button>
-      <a class="btn btn-primary" id="btnDl" href="#" download="reel.mp4">⬇ Descargar</a>
+      <button class="btn btn-ghost" id="btnRegen" onclick="regenerate()" disabled>🔄 Regenerar con cambios</button>
+      <a class="btn btn-primary" id="btnDl" href="#" download="reel.mp4" style="pointer-events:none;opacity:0.35">⬇ Descargar</a>
     </div>
   </div>
 
@@ -389,32 +396,35 @@ h2 em { font-style: normal; color: var(--accent); }
 </div>
 
 </main>
-
 <div class="toast" id="toast"></div>
 
 <script>
-// ── Config ──
 const API = window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0')
   ? 'http://localhost:8080'
   : 'https://videoeditor-production-0e32.up.railway.app';
 const API_SECRET = 'reels2024secretkey';
+const PIXABAY_KEY = '54811250-d4f02130e9d8b68bf186049a3';
 
-let cfg = { pixabay: '54811250-d4f02130e9d8b68bf186049a3' };
 let state = {
-  step: 0, file: null, uploadId: null,
+  step: 0, file: null, driveUrl: null, uploadId: null,
   transcript: null, analysis: null,
   subtitleStyle: 'word_highlight',
-  brolls: [], renderJobId: null, outputUrl: null
+  colorGrade: { brightness: 0.02, contrast: 1.15, saturation: 1.3 },
+  brolls: [], renderJobId: null, outputUrl: null,
+  music: null, musicVol: 0.15,
+  audioDuration: 0, audioUrl: null
 };
 
+let wavesurfer = null;
 
-
-// ── Navigation ──
+// ── Nav ──
 function go(step) {
   document.getElementById(`p${state.step}`).classList.remove('active');
   document.getElementById(`p${step}`).classList.add('active');
   state.step = step;
   updateDots();
+  if (step === 2 && state.audioUrl) initWaveform();
+  if (step === 2 && state.music === undefined) fetchMusicOptions();
 }
 function updateDots() {
   [0,1,2,3].forEach(i => {
@@ -433,7 +443,7 @@ dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('over
 fi.addEventListener('change', e => { if (e.target.files[0]) setFile(e.target.files[0]); });
 
 function setFile(f) {
-  state.file = f;
+  state.file = f; state.driveUrl = null;
   document.getElementById('fileName').textContent = f.name;
   document.getElementById('fileSize').textContent = (f.size/1024/1024).toFixed(1) + ' MB';
   document.getElementById('fileRow').style.display = 'flex';
@@ -441,23 +451,17 @@ function setFile(f) {
   document.getElementById('btnUp').disabled = false;
 }
 function resetFile() {
-  state.file = null;
+  state.file = null; state.driveUrl = null;
   document.getElementById('fileRow').style.display = 'none';
   document.getElementById('dropZone').style.display = 'block';
   document.getElementById('btnUp').disabled = true;
   fi.value = '';
 }
-
 function useDriveUrl() {
   const url = document.getElementById('driveUrl').value.trim();
   if (!url) { toast('Pegá un link de Drive', 'error'); return; }
-  // Convert Drive share URL to direct download
-  let directUrl = url;
   const match = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-  if (match) {
-    directUrl = `https://drive.google.com/uc?export=download&id=${match[1]}`;
-  }
-  state.driveUrl = directUrl;
+  state.driveUrl = match ? `https://drive.google.com/uc?export=download&id=${match[1]}` : url;
   state.file = null;
   document.getElementById('fileName').textContent = 'Video desde Drive';
   document.getElementById('fileSize').textContent = url.substring(0, 50) + '...';
@@ -474,68 +478,43 @@ async function startUpload() {
   document.getElementById('uploadProg').style.display = 'block';
 
   try {
-    // 1. Upload
-    setLbl('uploadLbl', '📤 Subiendo video...');
-    bar('uploadBar', 15, 20000);
+    setLbl('uploadLbl', '📤 Subiendo video...'); bar('uploadBar', 15, 20000);
     let up;
     if (state.driveUrl) {
-      // Drive URL: Flask descarga directo
-      up = await apiFetch('/upload-from-url', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: state.driveUrl })
-      });
+      up = await apiFetch('/upload-from-url', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url: state.driveUrl }) });
     } else {
-      const fd = new FormData();
-      fd.append('file', state.file);
+      const fd = new FormData(); fd.append('file', state.file);
       up = await apiFetch('/upload-video', { method:'POST', body: fd });
     }
     state.uploadId = up.job_id;
 
-    // 2. Compress audio
-    setLbl('uploadLbl', '🎙️ Extrayendo audio...');
-    bar('uploadBar', 35, 8000);
+    setLbl('uploadLbl', '🎙️ Extrayendo audio...'); bar('uploadBar', 35, 8000);
     const audio = await apiFetch('/compress-audio', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ video_url: `${API}/serve-video/${state.uploadId}` })
     });
+    state.audioUrl = `${API}/download-audio/${audio.job_id}`;
 
-    // 3. Download audio blob
-    setLbl('uploadLbl', '📥 Preparando Whisper...');
-    bar('uploadBar', 50, 4000);
-    const audioBlob = await (await fetch(`${API}${audio.audio_url}`)).blob();
-
-    // 4. Whisper via Flask
-    setLbl('uploadLbl', '🤖 Transcribiendo...');
-    bar('uploadBar', 70, 30000);
-    const audioPublicUrl = `${API}/download-audio/${audio.job_id}`;
+    setLbl('uploadLbl', '🤖 Transcribiendo...'); bar('uploadBar', 60, 30000);
     state.transcript = await apiFetch('/transcribe', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ audio_url: audioPublicUrl })
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ audio_url: state.audioUrl })
     });
 
-    // 5. GPT analysis via Flask
-    setLbl('uploadLbl', '🧠 Analizando con GPT...');
-    bar('uploadBar', 88, 15000);
-    const segs = (state.transcript.segments||[]).map(s => ({ id: s.id, start: s.start, end: s.end, text: s.text }));
+    setLbl('uploadLbl', '🧠 Analizando con GPT...'); bar('uploadBar', 88, 15000);
+    const segs = (state.transcript.segments||[]).map(s => ({ id:s.id, start:s.start, end:s.end, text:s.text }));
     state.analysis = await apiFetch('/analyze', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ segments: segs, duration: state.transcript.duration })
     });
 
     bar('uploadBar', 100, 400);
     setLbl('uploadLbl', '✅ Listo');
-
     populateTranscript();
     setTimeout(() => go(1), 700);
-
   } catch(e) {
     toast('Error: ' + e.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = 'Continuar →';
+    btn.disabled = false; btn.innerHTML = 'Continuar →';
   }
 }
 
@@ -543,21 +522,19 @@ function populateTranscript() {
   const { transcript: tr, analysis: an } = state;
   const cs = an.clip_start, ce = an.clip_end;
   const words = (tr.words||[]).filter(w => w.start >= cs && w.end <= ce);
+  state.audioDuration = ce - cs;
 
   document.getElementById('wCount').textContent = `${words.length} palabras`;
   document.getElementById('durBadge').textContent = `${Math.round(ce-cs)}s clip`;
-
   document.getElementById('trChips').innerHTML = `
     <span class="chip y">✂️ ${cs}s → ${ce}s</span>
     <span class="chip g">🎯 ${an.hook_text||'Hook detectado'}</span>
     <span class="chip">⚡ ${(an.energy_moments||[]).length} energy moments</span>
-    <span class="chip">🎬 ${(an.broll_moments||[]).length} b-rolls planificados</span>
+    <span class="chip">🎬 ${(an.broll_moments||[]).length} b-rolls</span>
   `;
-
   const segs = (tr.segments||[]).filter(s => s.start >= cs && s.end <= ce);
   document.getElementById('trEditor').innerHTML = segs.map(s => `<p>${s.text.trim()}</p>`).join('');
 
-  // Init brolls
   state.brolls = (an.broll_moments||[]).map(m => ({ second: m.second, keyword: m.keyword, url: null, loading: false }));
   renderBrolls();
   state.brolls.forEach((_, i) => fetchPixabay(i));
@@ -570,71 +547,202 @@ function selStyle(style, el) {
   el.classList.add('sel');
 }
 
+// ── Color controls ──
+function updCtrl(key, el) {
+  state.colorGrade[key] = parseFloat(el.value);
+  const val = parseFloat(el.value);
+  const fmt = key === 'brightness' ? (val >= 0 ? '+' : '') + val.toFixed(2) : val.toFixed(2);
+  document.getElementById(`v${key.charAt(0).toUpperCase()+key.slice(1)}`).textContent = fmt;
+}
+
+// ── Waveform ──
+function initWaveform() {
+  if (!state.audioUrl) return;
+  const container = document.getElementById('waveformEl');
+  container.innerHTML = '';
+  if (wavesurfer) { try { wavesurfer.destroy(); } catch(e){} wavesurfer = null; }
+
+  wavesurfer = WaveSurfer.create({
+    container: container,
+    waveColor: '#333',
+    progressColor: 'rgba(232,255,71,0.4)',
+    height: 60,
+    barWidth: 2,
+    barGap: 1,
+    barRadius: 2,
+    cursorColor: 'var(--accent)',
+    url: state.audioUrl
+  });
+
+  wavesurfer.on('ready', () => {
+    document.getElementById('waveEnd').textContent = Math.round(state.audioDuration) + 's';
+    renderWaveMarkers();
+  });
+}
+
+function renderWaveMarkers() {
+  const dur = state.audioDuration;
+  if (!dur) return;
+  const colors = ['rgba(232,255,71,0.2)', 'rgba(71,255,178,0.2)', 'rgba(255,71,87,0.2)'];
+  const accentColors = ['#e8ff47', '#47ffb2', '#ff4757'];
+  document.getElementById('brollMarkers').innerHTML = state.brolls.map((b, i) => {
+    if (!b.url) return '';
+    const pct = (b.second / dur) * 100;
+    const widthPct = (5 / dur) * 100; // 5s duration
+    return `<div class="broll-marker" style="left:${pct}%;width:${widthPct}%;background:${colors[i%3]};border-color:${accentColors[i%3]}">
+      <span class="broll-marker-label" style="color:${accentColors[i%3]}">B${i+1} ${b.second}s</span>
+    </div>`;
+  }).join('');
+}
+
 // ── B-Rolls ──
 function renderBrolls() {
   document.getElementById('brollList').innerHTML = state.brolls.map((b, i) => `
     <div class="broll-card">
-      <div class="broll-thumb">
-        ${b.url
-          ? `<video src="${b.url}" muted loop playsinline
-               onmouseenter="this.play()" onmouseleave="this.pause();this.currentTime=0"></video>
-             <div class="play-ov">▶</div>`
-          : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">
-               ${b.loading ? '<span class="spin" style="color:var(--accent)"></span>' : '🔍'}
-             </div>`
-        }
-      </div>
-      <div>
-        <div class="broll-kw">
-          ${b.keyword || '—'}
-          <span class="tag">Pixabay</span>
+      <div class="broll-top">
+        <div class="broll-thumb" onclick="toggleBrollPlay(${i}, this)">
+          ${b.url
+            ? `<video id="bvid${i}" src="${b.url}" muted loop playsinline></video>
+               <div class="play-ov" id="bov${i}">▶</div>`
+            : `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted)">
+                 ${b.loading ? '<span class="spin" style="color:var(--accent)"></span>' : '🔍'}
+               </div>`
+          }
         </div>
-        <div class="broll-timing">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">Inicio:</span>
-          <input type="number" class="time-in" value="${b.second}" min="0"
-            onchange="state.brolls[${i}].second=parseFloat(this.value)">
-          <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">seg</span>
-        </div>
-        <div class="regen-row">
-          <input type="text" class="regen-in" placeholder="Describí qué querés ver acá..." id="ri${i}">
-          <button class="btn btn-ghost btn-sm" onclick="regenBroll(${i})">🔄 Otro</button>
+        <div>
+          <div class="broll-kw">${b.keyword || '—'}<span class="tag">Pixabay</span></div>
+          <div class="broll-timing">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">Inicio:</span>
+            <input type="number" class="time-in" value="${b.second}" min="0"
+              onchange="updateBrollTime(${i}, parseFloat(this.value))">
+            <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">seg &nbsp;·&nbsp; dura 5s</span>
+          </div>
+          <div class="regen-row">
+            <input type="text" class="regen-in" placeholder="Describí exactamente qué querés ver..." id="ri${i}">
+            <button class="btn btn-ghost btn-sm" onclick="regenBroll(${i})">🔄 Otro</button>
+          </div>
         </div>
       </div>
     </div>
   `).join('');
 }
 
+function toggleBrollPlay(idx, el) {
+  const vid = document.getElementById(`bvid${idx}`);
+  const ov = document.getElementById(`bov${idx}`);
+  if (!vid) return;
+  if (vid.paused) { vid.play(); ov.style.opacity = '0'; }
+  else { vid.pause(); vid.currentTime = 0; ov.style.opacity = '1'; }
+}
+
+function updateBrollTime(idx, val) {
+  state.brolls[idx].second = val;
+  renderWaveMarkers();
+}
+
 async function fetchPixabay(idx) {
-  state.brolls[idx].loading = true;
-  renderBrolls();
+  state.brolls[idx].loading = true; renderBrolls();
   try {
     const kw = encodeURIComponent(state.brolls[idx].keyword);
-    const r = await fetch(`https://pixabay.com/api/videos/?key=${cfg.pixabay}&q=${kw}&per_page=3&orientation=vertical`);
+    const r = await fetch(`https://pixabay.com/api/videos/?key=${PIXABAY_KEY}&q=${kw}&per_page=5&orientation=vertical`);
     const d = await r.json();
+    // Try to get a relevant result — skip if no hits
     state.brolls[idx].url = d.hits?.[0]?.videos?.medium?.url || null;
   } catch(e) {}
-  state.brolls[idx].loading = false;
-  renderBrolls();
+  state.brolls[idx].loading = false; renderBrolls(); renderWaveMarkers();
 }
 
 async function regenBroll(idx) {
   const inp = document.getElementById(`ri${idx}`);
-  if (inp.value.trim()) { state.brolls[idx].keyword = inp.value.trim(); inp.value = ''; }
+  const comment = inp.value.trim();
+  if (comment) {
+    // Translate user comment to better english keyword for Pixabay
+    state.brolls[idx].keyword = comment;
+    inp.value = '';
+  }
   await fetchPixabay(idx);
+}
+
+// ── Music ──
+const MUSIC_OPTIONS = [
+  { id: 'motivational', label: 'Motivacional', tags: 'energético · upbeat', query: 'motivational upbeat background' },
+  { id: 'corporate',    label: 'Corporativo',  tags: 'profesional · limpio', query: 'corporate background music' },
+  { id: 'cinematic',    label: 'Cinematográfico', tags: 'dramático · épico', query: 'cinematic epic background' },
+  { id: 'lofi',         label: 'Lo-Fi',        tags: 'relajado · chill',  query: 'lofi chill background' },
+];
+
+async function fetchMusicOptions() {
+  const grid = document.getElementById('musicGrid');
+  grid.innerHTML = '<div style="font-family:var(--mono);font-size:11px;color:var(--muted)">Buscando música...</div>';
+
+  const results = [];
+  for (const opt of MUSIC_OPTIONS) {
+    try {
+      const r = await fetch(`https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(opt.query)}&category=music&per_page=3`);
+      const d = await r.json();
+      if (d.hits?.[0]) results.push({ ...opt, url: d.hits[0].previewURL || d.hits[0].pageURL });
+      else results.push({ ...opt, url: null });
+    } catch(e) { results.push({ ...opt, url: null }); }
+  }
+
+  // Store for later use
+  state.musicOptions = results;
+
+  grid.innerHTML = results.map((m, i) => `
+    <div class="music-item" id="mi${i}" onclick="selectMusic(${i})">
+      <div class="music-dot"></div>
+      <div>
+        <div class="music-name">${m.label}</div>
+        <div class="music-tags">${m.tags}</div>
+      </div>
+      ${m.url ? `<button class="btn btn-ghost btn-sm" onclick="previewMusic(event,${i})">▶</button>` : '<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">N/D</span>'}
+    </div>
+  `).join('');
+}
+
+let previewAudio = null;
+function previewMusic(e, idx) {
+  e.stopPropagation();
+  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+  const url = state.musicOptions?.[idx]?.url;
+  if (!url) return;
+  previewAudio = new Audio(url);
+  previewAudio.volume = state.musicVol;
+  previewAudio.play();
+}
+
+function selectMusic(idx) {
+  state.music = state.musicOptions?.[idx] || null;
+  document.querySelectorAll('.music-item').forEach((el, i) => {
+    el.classList.toggle('sel', i === idx);
+  });
+}
+
+function clearMusic() {
+  state.music = null;
+  document.querySelectorAll('.music-item').forEach(el => el.classList.remove('sel'));
+}
+
+function updMusicVol(el) {
+  state.musicVol = parseFloat(el.value);
+  document.getElementById('vMusicVol').textContent = Math.round(state.musicVol * 100) + '%';
 }
 
 // ── Render ──
 async function startRender() {
   const btn = document.getElementById('btnRender');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spin"></span> Enviando...';
+  btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Enviando...';
   go(3);
   document.getElementById('renderProg').style.display = 'block';
   document.getElementById('videoWrap').style.display = 'none';
-  bar('renderBar', 25, 8000);
+  bar('renderBar', 20, 8000);
 
   const brollUrls = state.brolls.filter(b=>b.url).map(b=>b.url);
   const brollSecs = state.brolls.filter(b=>b.url).map(b=>b.second);
+
+  // Build color_grade string from sliders
+  const cg = state.colorGrade;
+  const colorGradeFilter = `eq=contrast=${cg.contrast}:saturation=${cg.saturation}:brightness=${cg.brightness}:gamma=0.95`;
 
   try {
     setLbl('renderLbl', '🚀 Enviando a procesar...');
@@ -652,7 +760,7 @@ async function startRender() {
         zoom_enabled: true,
         zoom_intensity: 0.08,
         zoom_duration_sec: 1.5,
-        color_grade: 'energetic',
+        color_grade_filter: colorGradeFilter,
         subtitle_style: state.subtitleStyle,
         sub_font: 'Arial Black',
         sub_font_size: 74,
@@ -665,18 +773,19 @@ async function startRender() {
         sub_position: 2,
         sub_margin_v: 180,
         sub_words_per_line: 4,
+        music_url: state.music?.url || '',
+        music_volume: state.musicVol,
         overlay_image_url: '',
         overlay_text: ''
       })
     });
     state.renderJobId = job.job_id;
     setLbl('renderLbl', '⚙️ Procesando (3-5 min)...');
-    bar('renderBar', 55, 120000);
+    bar('renderBar', 55, 180000);
     pollRender();
   } catch(e) {
     toast('Error: ' + e.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = 'Generar Reel →';
+    btn.disabled = false; btn.innerHTML = 'Generar Reel →';
   }
 }
 
@@ -693,6 +802,7 @@ function pollRender() {
       } else if (d.status === 'error') {
         clearInterval(iv);
         toast('Error: ' + d.error, 'error');
+        setLbl('renderLbl', '❌ Error');
       }
     } catch(e) {}
   }, 12000);
@@ -706,19 +816,31 @@ function showResult(d) {
     <div class="meta-item"><span class="meta-lbl">Duración</span><span class="meta-val">${d.duration}s</span></div>
     <div class="meta-item"><span class="meta-lbl">Tamaño</span><span class="meta-val">${d.output_size_mb} MB</span></div>
     <div class="meta-item"><span class="meta-lbl">Palabras</span><span class="meta-val">${d.subtitles_words}</span></div>
-    <div class="meta-item"><span class="meta-lbl">B-Rolls</span><span class="meta-val">${d.brolls_applied} aplicados</span></div>
+    <div class="meta-item"><span class="meta-lbl">B-Rolls</span><span class="meta-val">${d.brolls_applied}</span></div>
   `;
-  document.getElementById('btnDl').href = state.outputUrl;
+
+  // Unlock regen box y download
+  const rb = document.getElementById('regenBox');
+  rb.style.opacity = '1'; rb.style.pointerEvents = 'auto';
+  document.getElementById('regenTxt').disabled = false;
+  document.getElementById('btnRegen').disabled = false;
+  const dl = document.getElementById('btnDl');
+  dl.href = state.outputUrl; dl.style.pointerEvents = 'auto'; dl.style.opacity = '1';
+
+  document.getElementById('p3Sub').textContent = '// Descargalo o pedile ajustes a la IA';
   toast('¡Reel listo! 🎉', 'success');
 }
 
 function regenerate() {
   toast('Regenerar con comentarios — próximamente 🚀', 'success');
-  // TODO: send regenTxt to GPT → new params → re-render
 }
 
 function startOver() {
-  state = { step:0, file:null, driveUrl:null, uploadId:null, transcript:null, analysis:null, subtitleStyle:'word_highlight', brolls:[], renderJobId:null, outputUrl:null };
+  if (wavesurfer) { try { wavesurfer.destroy(); } catch(e){} wavesurfer = null; }
+  state = { step:0, file:null, driveUrl:null, uploadId:null, transcript:null, analysis:null,
+    subtitleStyle:'word_highlight', colorGrade:{brightness:0.02,contrast:1.15,saturation:1.3},
+    brolls:[], renderJobId:null, outputUrl:null, music:null, musicVol:0.15,
+    audioDuration:0, audioUrl:null };
   resetFile();
   go(0);
 }
@@ -726,13 +848,9 @@ function startOver() {
 // ── Helpers ──
 async function apiFetch(path, opts = {}) {
   const headers = { 'Authorization': `Bearer ${API_SECRET}`, ...(opts.headers||{}) };
-  // Don't set Content-Type for FormData
   if (opts.body instanceof FormData) delete headers['Content-Type'];
   const r = await fetch(`${API}${path}`, { ...opts, headers });
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`${path} → ${r.status}: ${txt}`);
-  }
+  if (!r.ok) { const txt = await r.text(); throw new Error(`${path} → ${r.status}: ${txt}`); }
   return r.json();
 }
 
