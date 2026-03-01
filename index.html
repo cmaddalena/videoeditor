@@ -250,10 +250,18 @@ h2 em{font-style:normal;color:var(--accent);}
   <div class="sec-label">Música de fondo</div>
   <div class="music-box">
     <h4>🎵 Música de fondo</h4>
-    <p class="mdesc">// Pixabay Music · libre de derechos · mezclada suave debajo de tu voz</p>
-    <div class="music-grid" id="musicGrid">
-      <div style="font-family:var(--mono);font-size:11px;color:var(--muted);display:flex;align-items:center;gap:8px">
-        <span class="spin" style="color:var(--accent)"></span> Buscando música...
+    <p class="mdesc">// Libre de derechos · mezclada suave debajo de tu voz · o subí tu propio MP3</p>
+    <div class="music-grid" id="musicGrid"></div>
+    <div style="margin-bottom:14px">
+      <div style="font-family:var(--mono);font-size:10px;color:var(--muted);margin-bottom:7px;text-transform:uppercase;letter-spacing:1px">O subí tu propio MP3</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:7px 14px;border-radius:8px;border:1px solid var(--border);font-family:var(--mono);font-size:12px;color:var(--text);background:var(--surface2);transition:all .2s" 
+               onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+          📁 Elegir archivo
+          <input type="file" id="musicUpload" accept="audio/*" style="display:none" onchange="handleMusicUpload(this)">
+        </label>
+        <span id="musicUploadName" style="font-family:var(--mono);font-size:11px;color:var(--muted)">—</span>
+        <button class="btn btn-ghost btn-sm" onclick="clearMusicUpload()" id="btnClearUpload" style="display:none">✕</button>
       </div>
     </div>
     <div class="vol-row">
@@ -331,7 +339,8 @@ const API = window.location.origin.includes('localhost') || window.location.orig
   ? 'http://localhost:8080'
   : 'https://videoeditor-production-0e32.up.railway.app';
 const API_SECRET = 'reels2024secretkey';
-const PIXABAY_KEY = '54811250-d4f02130e9d8b68bf186049a3';
+const PIXABAY_KEY = '54811250-d4f02130e9d8b68bf186049a3'; // still used for fallback
+const PEXELS_KEY  = 'zF6CUzMbFFlB9QUSzcprk9Eqf4QSAreqBLxcHdrSSI2MKRb016BBjTkT';
 
 let state = {
   step:0, file:null, driveUrl:null, uploadId:null,
@@ -339,7 +348,8 @@ let state = {
   colorGrade:{brightness:0.02, contrast:1.15, saturation:1.3},
   brolls:[], renderJobId:null, outputUrl:null,
   music:null, musicVol:0.15, musicOptions:[],
-  audioDuration:0, audioUrl:null, renderPayload:null
+  audioDuration:0, audioUrl:null, renderPayload:null,
+  musicUploadFile:null  // user-uploaded MP3
 };
 let wavesurfer = null;
 let previewAudio = null;
@@ -581,10 +591,19 @@ function renderBrolls() {
             onchange="updTime(${i},parseFloat(this.value))">
           <span style="font-family:var(--mono);font-size:11px;color:var(--muted)">seg · dura 5s</span>
         </div>
-        <div class="broll-footer">
+        <div class="broll-footer" style="margin-bottom:6px">
           <input type="text" class="regen-in" placeholder="Describí qué querés ver en español..." id="ri${i}">
           <button class="btn btn-ghost btn-sm" onclick="regenBroll(${i})">🔄</button>
           <button class="btn-del" onclick="removeBroll(${i})">✕</button>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="text" class="regen-in" placeholder="O pegá URL de video directo..." id="burl${i}" 
+            style="font-size:10px;color:var(--muted)" onblur="setBrollUrl(${i}, this.value)">
+          <label style="cursor:pointer;font-family:var(--mono);font-size:10px;padding:5px 9px;border:1px solid var(--border);border-radius:6px;color:var(--muted);white-space:nowrap;background:var(--surface2)"
+                 title="Subir video propio">
+            📁
+            <input type="file" accept="video/*" style="display:none" onchange="handleBrollUpload(${i}, this)">
+          </label>
         </div>
       </div>
     </div>
@@ -617,19 +636,30 @@ async function fetchPixabay(idx) {
   try {
     const raw = state.brolls[idx].keyword || 'business';
     const kw  = toEnKeyword(raw);
-    console.log(`broll[${idx}] "${raw}" → "${kw}"`);
-    const r = await fetch(`https://pixabay.com/api/videos/?key=${PIXABAY_KEY}&q=${encodeURIComponent(kw)}&per_page=5&orientation=vertical`);
-    const d = await r.json();
-    if (d.hits?.length) {
-      state.brolls[idx].url = d.hits[0].videos.medium.url;
+    console.log(`broll[${idx}] "${raw}" → Pexels: "${kw}"`);
+
+    // Pexels Videos API — much better semantic search
+    const pr = await fetch(
+      `https://api.pexels.com/videos/search?query=${encodeURIComponent(kw)}&per_page=5&orientation=portrait`,
+      { headers: { 'Authorization': PEXELS_KEY } }
+    );
+    const pd = await pr.json();
+    const pvid = pd.videos?.[0];
+    if (pvid) {
+      // Get the best quality <= 1080p vertical file
+      const files = pvid.video_files || [];
+      const best = files.filter(f => f.height >= 720).sort((a,b) => b.height - a.height)[0]
+                || files[0];
+      state.brolls[idx].url = best?.link || null;
+      state.brolls[idx].pexelsId = pvid.id;
     } else {
-      // fallback first word
+      // Fallback to Pixabay
       const kw2 = kw.split(' ')[0];
       const r2 = await fetch(`https://pixabay.com/api/videos/?key=${PIXABAY_KEY}&q=${encodeURIComponent(kw2)}&per_page=3`);
       const d2 = await r2.json();
       state.brolls[idx].url = d2.hits?.[0]?.videos?.medium?.url || null;
     }
-  } catch(e) { console.error('pixabay',e); }
+  } catch(e) { console.error('broll fetch error', e); }
   state.brolls[idx].loading = false; renderBrolls(); renderWaveMarkers();
 }
 async function regenBroll(idx) {
@@ -638,63 +668,129 @@ async function regenBroll(idx) {
   await fetchPixabay(idx);
 }
 
+function setBrollUrl(idx, url) {
+  if (!url || !url.startsWith('http')) return;
+  state.brolls[idx].url = url;
+  state.brolls[idx].loading = false;
+  renderBrolls(); renderWaveMarkers();
+}
+
+function handleBrollUpload(idx, input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  const localUrl = URL.createObjectURL(file);
+  state.brolls[idx].url = localUrl;
+  state.brolls[idx].uploadFile = file;
+  state.brolls[idx].keyword = file.name.replace(/\.[^.]+$/, '');
+  renderBrolls(); renderWaveMarkers();
+  toast(`Video cargado: ${file.name}`, 'success');
+}
+
 // ── Music ──
-// Pixabay audio API endpoint
-const MUSIC_OPTS = [
-  {label:'Motivacional', tags:'energético · upbeat',   q:'upbeat motivational'},
-  {label:'Corporativo',  tags:'profesional · limpio',  q:'corporate business'},
-  {label:'Cinematográfico', tags:'épico · dramático',  q:'cinematic epic'},
-  {label:'Lo-Fi / Chill', tags:'relajado · suave',     q:'lofi chill'},
+// Hardcoded free tracks from ccmixter + freemusicarchive (direct MP3 links, CC licensed)
+const MUSIC_TRACKS = [
+  {
+    label:'Motivacional', tags:'energético · upbeat', emoji:'⚡',
+    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Motivate.mp3'
+  },
+  {
+    label:'Corporativo', tags:'profesional · limpio', emoji:'💼',
+    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Impact%20Moderato.mp3'
+  },
+  {
+    label:'Cinematográfico', tags:'épico · dramático', emoji:'🎬',
+    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Cylinder%20Five.mp3'
+  },
+  {
+    label:'Lo-Fi / Chill', tags:'relajado · suave', emoji:'🌙',
+    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Comfortable%20Mystery%205.mp3'
+  },
+  {
+    label:'Hip-Hop / Trap', tags:'urbano · rythmico', emoji:'🎤',
+    url:'https://incompetech.com/music/royalty-free/mp3-royaltyfree/Hip%20Hop%20Christmas.mp3'
+  },
 ];
-async function fetchMusicOptions() {
-  const grid = document.getElementById('musicGrid');
-  const results = [];
-  for (const opt of MUSIC_OPTS) {
-    try {
-      // Use Pixabay audio search API
-      const r = await fetch(
-        `https://pixabay.com/api/?key=${PIXABAY_KEY}&q=${encodeURIComponent(opt.q)}&category=music&per_page=5&safesearch=true`
-      );
-      const d = await r.json();
-      const hit = d.hits?.find(h => h.previewURL) || d.hits?.[0] || null;
-      results.push({...opt, url: hit?.previewURL || null});
-    } catch(e) {
-      results.push({...opt, url:null});
-    }
-  }
-  state.musicOptions = results;
-  grid.innerHTML = results.map((m,i) => `
-    <div class="music-item" id="mi${i}" onclick="selectMusic(${i})">
+
+function fetchMusicOptions() {
+  // No API call needed — tracks are hardcoded
+  state.musicOptions = MUSIC_TRACKS.map(t => ({...t}));
+  renderMusicGrid();
+}
+
+function renderMusicGrid() {
+  document.getElementById('musicGrid').innerHTML = state.musicOptions.map((m,i) => `
+    <div class="music-item ${state.music?.label===m.label?'sel':''}" id="mi${i}" onclick="selectMusic(${i})">
       <div class="mdot"></div>
-      <div style="flex:1"><div class="mname">${m.label}</div><div class="mtags">${m.tags}</div></div>
-      ${m.url
-        ? `<button class="btn btn-ghost btn-sm" onclick="prevMusic(event,${i})">▶ Preview</button>`
-        : `<span style="font-family:var(--mono);font-size:10px;color:var(--muted)">N/D</span>`}
+      <div style="flex:1">
+        <div class="mname">${m.emoji} ${m.label}</div>
+        <div class="mtags">${m.tags}</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="prevMusic(event,${i})" id="pbtn${i}">▶ Preview</button>
     </div>
   `).join('');
 }
+
 function prevMusic(e, idx) {
   e.stopPropagation();
-  if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+  // Stop any playing preview
+  if (previewAudio) {
+    previewAudio.pause(); previewAudio = null;
+    document.querySelectorAll('[id^=pbtn]').forEach(b => b.textContent = '▶ Preview');
+  }
   const url = state.musicOptions?.[idx]?.url;
-  if (!url) { toast('Preview no disponible','error'); return; }
+  if (!url) return;
   previewAudio = new Audio(url);
   previewAudio.volume = state.musicVol;
-  previewAudio.play().catch(() => toast('No se pudo reproducir','error'));
+  previewAudio.play().catch(err => {
+    console.warn('Preview failed:', err);
+    toast('Preview no disponible para este track','error');
+  });
+  document.getElementById(`pbtn${idx}`).textContent = '⏸ Stop';
+  previewAudio.onended = () => {
+    document.getElementById(`pbtn${idx}`).textContent = '▶ Preview';
+    previewAudio = null;
+  };
 }
+
 function selectMusic(idx) {
   state.music = state.musicOptions?.[idx] || null;
+  state.musicUploadFile = null; // clear upload if selecting preset
+  document.getElementById('musicUploadName').textContent = '—';
+  document.getElementById('btnClearUpload').style.display = 'none';
   document.querySelectorAll('.music-item').forEach((el,i) => el.classList.toggle('sel', i===idx));
 }
+
 function clearMusic() {
-  state.music = null;
+  state.music = null; state.musicUploadFile = null;
   document.querySelectorAll('.music-item').forEach(el => el.classList.remove('sel'));
+  document.getElementById('musicUploadName').textContent = '—';
+  document.getElementById('btnClearUpload').style.display = 'none';
   if (previewAudio) { previewAudio.pause(); previewAudio = null; }
+  document.querySelectorAll('[id^=pbtn]').forEach(b => b.textContent = '▶ Preview');
 }
+
 function updMusicVol(el) {
   state.musicVol = parseFloat(el.value);
   document.getElementById('vMusicVol').textContent = Math.round(state.musicVol*100)+'%';
   if (previewAudio) previewAudio.volume = state.musicVol;
+}
+
+// Music file upload
+function handleMusicUpload(input) {
+  const file = input.files?.[0];
+  if (!file) return;
+  state.musicUploadFile = file;
+  state.music = null; // clear preset selection
+  document.querySelectorAll('.music-item').forEach(el => el.classList.remove('sel'));
+  document.getElementById('musicUploadName').textContent = file.name;
+  document.getElementById('btnClearUpload').style.display = 'inline-flex';
+  toast('MP3 listo para usar 🎵', 'success');
+}
+function clearMusicUpload() {
+  state.musicUploadFile = null;
+  document.getElementById('musicUploadName').textContent = '—';
+  document.getElementById('btnClearUpload').style.display = 'none';
+  document.getElementById('musicUpload').value = '';
 }
 
 // ── Color controls ──
@@ -710,7 +806,7 @@ function buildColorFilter() {
 }
 
 // ── Render ──
-function buildPayload() {
+function buildPayload(musicUrlOverride) {
   return {
     video_url: `${API}/serve-video/${state.uploadId}`,
     clip_start: state.analysis.clip_start,
@@ -727,7 +823,7 @@ function buildPayload() {
     sub_outline_color:'000000', sub_bold:true,
     sub_outline_size:4, sub_shadow:2, sub_position:2,
     sub_margin_v:180, sub_words_per_line:4,
-    music_url: state.music?.url || '',
+    music_url: musicUrlOverride !== undefined ? musicUrlOverride : (state.music?.url || ''),
     music_volume: state.musicVol,
     overlay_image_url:'', overlay_text:''
   };
@@ -738,8 +834,24 @@ async function startRender() {
   go(3);
   document.getElementById('renderProg').style.display='block';
   document.getElementById('videoWrap').style.display='none';
-  bar('renderBar',20,8000);
-  state.renderPayload = buildPayload();
+  bar('renderBar',10,5000);
+
+  // If user uploaded an MP3, upload it first to get a server URL
+  let musicUrl = state.music?.url || '';
+  if (state.musicUploadFile) {
+    try {
+      setLbl('renderLbl','🎵 Subiendo música...');
+      const fd = new FormData(); fd.append('file', state.musicUploadFile);
+      const up = await apiFetch('/upload-audio', {method:'POST', body:fd});
+      musicUrl = `${API}/download-audio/${up.job_id}`;
+    } catch(e) {
+      toast('Error subiendo música, continuando sin ella','error');
+      musicUrl = '';
+    }
+  }
+
+  state.renderPayload = buildPayload(musicUrl);
+  bar('renderBar',20,5000);
   try {
     setLbl('renderLbl','🚀 Enviando a procesar...');
     const job = await apiFetch('/process-reel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(state.renderPayload)});
@@ -819,7 +931,7 @@ function startOver() {
   if (previewAudio) { previewAudio.pause(); previewAudio=null; }
   state = {step:0,file:null,driveUrl:null,uploadId:null,transcript:null,analysis:null,
     subtitleStyle:'word_highlight',colorGrade:{brightness:0.02,contrast:1.15,saturation:1.3},
-    brolls:[],renderJobId:null,outputUrl:null,music:null,musicVol:0.15,musicOptions:[],
+    brolls:[],renderJobId:null,outputUrl:null,music:null,musicVol:0.15,musicOptions:[],musicUploadFile:null,
     audioDuration:0,audioUrl:null,renderPayload:null};
   resetFile(); go(0);
 }

@@ -216,6 +216,19 @@ def serve_video(job_id):
     return jsonify({"error": "No encontrado"}), 404
 
 
+@app.route("/upload-audio", methods=["POST"])
+def upload_audio():
+    if not check_auth(request):
+        return jsonify({"error": "Unauthorized"}), 401
+    job_id = str(uuid.uuid4())[:8]
+    if "file" not in request.files:
+        return jsonify({"error": "Falta archivo"}), 400
+    f = request.files["file"]
+    ext = os.path.splitext(f.filename)[1] if f.filename else ".mp3"
+    path = f"{WORK_DIR}/{job_id}_audio_upload{ext}"
+    f.save(path)
+    return jsonify({"job_id": job_id, "audio_url": f"/download-audio/{job_id}"})
+
 @app.route("/compress-audio", methods=["POST"])
 def compress_audio():
     if not check_auth(request):
@@ -262,11 +275,19 @@ def compress_audio():
 @app.route("/download-audio/<job_id>", methods=["GET"])
 def download_audio(job_id):
     safe = secure_filename(job_id)
-    path = f"{OUTPUT_DIR}/{safe}_audio.mp3"
-    if not os.path.exists(path):
+    # Check compressed audio (from video), uploaded audio, and any extension
+    candidates = [
+        f"{OUTPUT_DIR}/{safe}_audio.mp3",
+        f"{WORK_DIR}/{safe}_audio_upload.mp3",
+        f"{WORK_DIR}/{safe}_audio_upload.m4a",
+        f"{WORK_DIR}/{safe}_audio_upload.wav",
+        f"{WORK_DIR}/{safe}_audio_upload.ogg",
+    ]
+    path = next((p for p in candidates if os.path.exists(p)), None)
+    if not path:
         return jsonify({"error": "Audio no encontrado"}), 404
-    return send_file(path, mimetype="audio/mpeg", as_attachment=True,
-                     download_name=f"audio_{safe}.mp3")
+    mime = "audio/mpeg" if path.endswith(".mp3") else "audio/mp4" if path.endswith(".m4a") else "audio/wav"
+    return send_file(path, mimetype=mime, as_attachment=False)
 
 
 @app.route("/transcribe", methods=["POST"])
